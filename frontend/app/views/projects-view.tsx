@@ -291,7 +291,7 @@ export function ProjectsView() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {SORTS.map(s => (
-                <DropdownMenuItem key={s.k} onClick={() => dispatch({ type: 'SET_SORT', payload: s.k })}>
+                <DropdownMenuItem key={s.k} onClick={() => dispatch({ type: 'SET_SORT', payload: s.k as "modified" | "created" | "name" })}>
                   {s.label}
                 </DropdownMenuItem>
               ))}
