@@ -39,7 +39,7 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
     setError(null);
 
     try {
-      const response = await projectsApi.list(options);
+      const response = await projectsApi.list(options) as { items: Project[]; total: number };
 
       // Transform API response to match frontend format
       const transformedProjects = response.items.map(project => ({
