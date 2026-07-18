@@ -1,41 +1,94 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# =========================
+# Git
+# =========================
+.git
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# =========================
+# Python
+# =========================
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.vsix
 
-# testing
-/coverage
+# Virtual environments
+venv/
+.venv/
+env/
+backend/venv/
 
-# next.js
-/.next/
-/out/
+# Environment variables
+.env
+.env.*
+!.env.example
 
-# production
-/build
+# =========================
+# Node / Next.js
+# =========================
+frontend/node_modules/
+frontend/.next/
+frontend/dist/
+frontend/out/
+frontend/.turbo/
 
-# misc
-.DS_Store
-*.pem
-
-# debug
+# Logs
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# =========================
+# VS Code
+# =========================
+.vscode/
 
-# vercel
-.vercel
+# =========================
+# macOS
+# =========================
+.DS_Store
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# =========================
+# Linux
+# =========================
+*~
+
+# =========================
+# Database
+# =========================
+postgres/data/
+postgres/*.log
+
+# SQLite
+*.db
+*.sqlite3
+
+# =========================
+# IDE
+# =========================
+.idea/
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.swp
+*.bak
+
+# =========================
+# Celery
+# =========================
+celerybeat-schedule
+
+# =========================
+# Uploads / generated files
+# (uncomment if applicable)
+# =========================
+# backend/uploads/
+# backend/media/
+# backend/static/

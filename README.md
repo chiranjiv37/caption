@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Captions Studio
 
-## Getting Started
+A video caption editing and management platform.
 
-First, run the development server:
+## Project Structure
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+/
+├── frontend/          # Next.js frontend application
+│   ├── app/          # Next.js app directory
+│   ├── components/   # React components
+│   ├── lib/          # Utilities
+│   └── ...
+└── backend/          # Backend API (to be implemented)
+    └── README.md
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Frontend
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The frontend is a Next.js application with:
+- Projects management
+- Series organization
+- Caption editor with video player
+- Export functionality (SRT, VTT, TXT, burned-in video)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Running the Frontend
 
-## Learn More
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+### Building
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+cd frontend
+npm run build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Backend
 
-## Deploy on Vercel
+The backend API is planned but not yet implemented. See `backend/README.md` for details.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Database
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+create db
+```
+Step 1. Create the directories
+mkdir -p /storage5/caption/postgres/data
+sudo chown -R postgres:postgres /storage5/caption/postgres
+
+Step 2. Initialize the database cluster
+sudo -u postgres /usr/lib/postgresql/16/bin/initdb \
+    -D /storage5/caption/postgres/data
+
+Step 3. Start PostgreSQL
+sudo -u postgres /usr/lib/postgresql/16/bin/pg_ctl \
+    -D /storage5/caption/postgres/data \
+    -l /storage5/caption/postgres/postgres.log \
+    start
+
+Step 4. create db
+psql -U postgres
+CREATE DATABASE captions_studio;
+
+Stept 5. 
+CREATE ROLE captions_user WITH LOGIN PASSWORD 'chiranjiv';
+ALTER ROLE captions_user CREATEDB;
+ALTER DATABASE captions_studio OWNER TO captions_user;
+GRANT ALL PRIVILEGES ON DATABASE captions_studio TO captions_user;
+\q
+
+Step 6. if new database then run this command to create table in database
+python -m alembic upgrade head
+
+```
+
+## License
+
+Private
