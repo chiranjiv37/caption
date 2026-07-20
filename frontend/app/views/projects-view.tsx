@@ -2,6 +2,9 @@
 
 import { useAppState } from '@/app/hooks/use-app-state';
 import { useProjects } from '@/app/hooks/use-projects';
+import { useSeries } from '@/app/hooks/use-series';
+import { CreateProjectDialog } from '@/app/components/create-project-dialog';
+import { CreateSeriesDialog } from '@/app/components/create-series-dialog';
 import { STATUSES, SORTS, TILES } from '@/app/data/initial-data';
 import { colFor, statusColor, statusLabel, roleCfg } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -37,16 +40,16 @@ export function ProjectsView() {
   const { state, dispatch } = useAppState();
   const router = useRouter();
   const {
-    series,
     search,
     tab,
-    kindTab,
     status,
     sort,
     inSeries,
     cardMenuFor,
     confirmDelId,
     newMenuOpen,
+    dialogOpen,
+    seriesDialogOpen,
   } = state;
 
   const [localSearch, setLocalSearch] = useState(search);
@@ -62,11 +65,22 @@ export function ProjectsView() {
     toggleArchive: apiToggleArchive,
     deleteProject: apiDeleteProject,
     duplicateProject: apiDuplicateProject,
+    createProject,
   } = useProjects({
     search: localSearch || undefined,
     status: status || undefined,
     archived: showArchived || undefined,
     sort_by: sort === 'modified' ? 'updated_at' : sort === 'created' ? 'created_at' : 'name',
+    sort_order: 'desc',
+  });
+
+  // API integration for series
+  const {
+    series: seriesList,
+    createSeries,
+  } = useSeries({
+    archived: false,
+    sort_by: 'updated_at',
     sort_order: 'desc',
   });
 
@@ -164,6 +178,26 @@ export function ProjectsView() {
   const handleOpenProject = (project: typeof projects[0]) => {
     dispatch({ type: 'SET_ACTIVE_PROJECT', payload: project });
   };
+
+  const handleCreateProject = useCallback(async (data: {
+    name: string;
+    description?: string;
+    source_language: string;
+    series_id?: string;
+  }) => {
+    await createProject(data);
+    dispatch({ type: 'SET_TOAST', payload: `Project created · ${data.name}` });
+  }, [createProject, dispatch]);
+
+  const handleCreateSeries = useCallback(async (data: {
+    name: string;
+    description?: string;
+  }) => {
+    await createSeries(data);
+    dispatch({ type: 'SET_TOAST', payload: `Series created · ${data.name}` });
+    // Optionally navigate to series view
+    // dispatch({ type: 'SET_VIEW', payload: 'series' });
+  }, [createSeries, dispatch]);
 
   if (error) {
     return (
@@ -428,6 +462,21 @@ export function ProjectsView() {
             </p>
           </div>
         )}
+
+        {/* Create Project Dialog */}
+        <CreateProjectDialog
+          open={dialogOpen}
+          onOpenChange={(open) => dispatch({ type: 'SET_DIALOG_OPEN', payload: open })}
+          onCreate={handleCreateProject}
+          series={seriesList.map(s => ({ id: s.id, name: s.name }))}
+        />
+
+        {/* Create Series Dialog */}
+        <CreateSeriesDialog
+          open={seriesDialogOpen}
+          onOpenChange={(open) => dispatch({ type: 'SET_SERIES_DIALOG_OPEN', payload: open })}
+          onCreate={handleCreateSeries}
+        />
       </div>
     </div>
   );

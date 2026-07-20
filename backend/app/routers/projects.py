@@ -23,7 +23,7 @@ router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
 @router.get(
-    "/",
+    "",
     response_model=PaginatedResponse[ProjectListResponse],
     summary="List projects",
 )
@@ -67,7 +67,7 @@ async def list_projects(
 
 
 @router.post(
-    "/",
+    "",
     response_model=ProjectDetailResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create project",

@@ -270,15 +270,15 @@ export const projectsApi = {
   // }>('/projects?' + new URLSearchParams(params as Record<string, string>).toString()),
 
   list: (params = {}) => {
-  const filteredParams = Object.fromEntries(
-    Object.entries(params).filter(
-      ([_, value]) => value !== undefined && value !== null
-    )
-  );
+    const filteredParams = Object.fromEntries(
+      Object.entries(params).filter(
+        ([_, value]) => value !== undefined && value !== null
+      )
+    );
 
-  const queryString = new URLSearchParams(filteredParams as Record<string, string>).toString();
-  return apiClient.get(`/projects${queryString ? `?${queryString}` : ''}`);
-},
+    const queryString = new URLSearchParams(filteredParams as Record<string, string>).toString();
+    return apiClient.get(`/projects${queryString ? `?${queryString}` : ''}`);
+  },
 
   get: (id: string) => apiClient.get<Project>(`/projects/${id}`),
 
@@ -321,6 +321,58 @@ export const assetsApi = {
     apiClient.get<{ download_url: string }>(`/assets/${id}/download`),
 };
 
+// Series API
+export const seriesApi = {
+  list: (params = {}) => {
+    const filteredParams = Object.fromEntries(
+      Object.entries(params).filter(
+        ([_, value]) => value !== undefined && value !== null
+      )
+    );
+
+    const queryString = new URLSearchParams(filteredParams as Record<string, string>).toString();
+    return apiClient.get<{ items: Series[]; total: number }>(`/series/${queryString ? `?${queryString}` : ''}`);
+  },
+
+  get: (id: string) => apiClient.get<SeriesDetail>(`/series/${id}`),
+
+  create: (data: { name: string; description?: string; languages?: string[] }) =>
+    apiClient.post<SeriesDetail>('/series', data),
+
+  update: (id: string, data: Partial<Series>) =>
+    apiClient.put<SeriesDetail>(`/series/${id}`, data),
+
+  delete: (id: string, permanent?: boolean) =>
+    apiClient.delete(`/series/${id}${permanent ? '?permanent=true' : ''}`),
+
+  toggleArchive: (id: string) =>
+    apiClient.post<SeriesDetail>(`/series/${id}/archive`, {}),
+
+  // Speakers
+  addSpeaker: (seriesId: string, data: { name: string; meta?: string; hue?: number }) =>
+    apiClient.post<SeriesSpeaker>(`/series/${seriesId}/speakers`, data),
+
+  removeSpeaker: (seriesId: string, speakerId: string) =>
+    apiClient.delete(`/series/${seriesId}/speakers/${speakerId}`),
+
+  // Terms
+  addTerm: (seriesId: string, data: { term: string; rule: string }) =>
+    apiClient.post<SeriesTerm>(`/series/${seriesId}/terms`, data),
+
+  removeTerm: (seriesId: string, termId: string) =>
+    apiClient.delete(`/series/${seriesId}/terms/${termId}`),
+
+  // Episodes
+  addEpisode: (seriesId: string, data: { project_id: string; title: string; meta?: string }) =>
+    apiClient.post<Episode>(`/series/${seriesId}/episodes`, data),
+
+  removeEpisode: (seriesId: string, episodeId: string) =>
+    apiClient.delete(`/series/${seriesId}/episodes/${episodeId}`),
+
+  reorderEpisodes: (seriesId: string, episodeIds: string[]) =>
+    apiClient.post<Episode[]>(`/series/${seriesId}/reorder`, { episode_ids: episodeIds }),
+};
+
 // Types (matching backend schemas)
 export interface Project {
   id: string;
@@ -343,6 +395,54 @@ export interface Project {
   updated?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface Series {
+  id: string;
+  name: string;
+  description?: string;
+  hue: number;
+  is_archived: boolean;
+  is_deleted: boolean;
+  owner_id: string;
+  episode_count?: number;
+  languages?: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SeriesDetail extends Series {
+  speakers: SeriesSpeaker[];
+  terms: SeriesTerm[];
+  episodes: Episode[];
+}
+
+export interface SeriesSpeaker {
+  id: string;
+  series_id: string;
+  name: string;
+  meta?: string;
+  hue: number;
+  created_at: string;
+}
+
+export interface SeriesTerm {
+  id: string;
+  series_id: string;
+  term: string;
+  rule: string;
+  created_at: string;
+}
+
+export interface Episode {
+  id: string;
+  series_id: string;
+  project_id: string;
+  title: string;
+  meta?: string;
+  status: string;
+  sort_order: number;
+  created_at: string;
 }
 
 export interface User {

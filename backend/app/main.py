@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import auth, projects, assets
+from app.routers import auth, projects, series, assets
 
 settings = get_settings()
 
@@ -30,10 +30,13 @@ app = FastAPI(
     title="Captions Studio API",
     description="Backend API for the Captions Studio video caption editing platform",
     version="1.0.0",
-    docs_url="/docs" if settings.is_development else None,
-    redoc_url="/redoc" if settings.is_development else None,
+    docs_url="/api/v1/docs" if settings.is_development else None,
+    redoc_url="/api/v1/redoc" if settings.is_development else None,
     lifespan=lifespan,
+    redirect_slashes=False,
 )
+
+print(f"Starting FastAPI app in {settings.app_env} mode. Debug: {settings.debug}")
 
 # CORS middleware
 app.add_middleware(
@@ -46,7 +49,7 @@ app.add_middleware(
 
 
 # Health check endpoint
-@app.get("/health", tags=["Health"])
+@app.get("/api/v1/health", tags=["Health"])
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "version": "1.0.0"}
@@ -55,11 +58,16 @@ async def health_check():
 # Include routers
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(projects.router, prefix="/api/v1")
+app.include_router(series.router, prefix="/api/v1")
 app.include_router(assets.router, prefix="/api/v1")
+
+for route in app.routes:
+    methods = getattr(route, "methods", [])
+    print(methods, route.path)
 
 
 # Root endpoint
-@app.get("/", tags=["Root"])
+@app.get("/api/v1", tags=["Root"])
 async def root():
     """Root endpoint with API info."""
     return {

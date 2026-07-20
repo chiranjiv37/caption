@@ -1,6 +1,42 @@
 # Captions Studio
 
-A video caption editing and management platform.
+A professional video caption editing and management platform.
+
+**📚 Full Documentation: [CLAUDE.md](./CLAUDE.md)**
+
+## Quick Start
+
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+# http://localhost:3000
+```
+
+### Backend
+```bash
+cd backend
+source venv/bin/activate
+uvicorn app.main:app --reload --port 8001
+# http://localhost:8001/docs
+```
+
+## Project Status
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | ✅ Complete | Foundation (Frontend + Backend + Auth) |
+| Phase 2 | ⏳ Pending | Core Editor Features |
+| Phase 3 | ⏳ Pending | Transcription (Whisper) |
+| Phase 4 | ⏳ Pending | Translation |
+| Phase 5 | ⏳ Pending | Export (SRT/VTT/Video) |
+
+## Tech Stack
+
+- **Frontend**: Next.js 16 + TypeScript + Tailwind CSS + shadcn/ui
+- **Backend**: FastAPI + PostgreSQL + SQLAlchemy 2.0 + JWT Auth
+- **Tasks**: Celery + Redis
 
 ## Project Structure
 
@@ -9,38 +45,15 @@ A video caption editing and management platform.
 ├── frontend/          # Next.js frontend application
 │   ├── app/          # Next.js app directory
 │   ├── components/   # React components
-│   ├── lib/          # Utilities
-│   └── ...
-└── backend/          # Backend API (to be implemented)
-    └── README.md
+│   └── lib/          # Utilities
+├── backend/          # FastAPI backend
+│   ├── app/          # Application code
+│   ├── alembic/      # Database migrations
+│   └── tests/        # Test suite
+└── CLAUDE.md         # 📚 Full Documentation
 ```
 
-## Frontend
-
-The frontend is a Next.js application with:
-- Projects management
-- Series organization
-- Caption editor with video player
-- Export functionality (SRT, VTT, TXT, burned-in video)
-
-### Running the Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Building
-
-```bash
-cd frontend
-npm run build
-```
-
-## Backend
-
-The backend API is planned but not yet implemented. See `backend/README.md` for details.
+## Database Setup
 
 ## Database
 
