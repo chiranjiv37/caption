@@ -102,3 +102,9 @@ celerybeat-schedule
 
 # nginx
 nginx/
+
+#############################
+# Claude
+#############################
+
+.claude/settings.local.json

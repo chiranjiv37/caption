@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "LS",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch)",
+      "Bash(npm run lint*)",
+      "Bash(npm run test*)",
+      "Bash(pytest*)",
+      "Bash(alembic current)",
+      "Bash(alembic history)",
+      "Bash(python -m*)"
+    ]
+  },
+
+  "ignore": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/.turbo/**",
+    "**/venv/**",
+    "**/__pycache__/**",
+    "**/.pytest_cache/**",
+    "**/.mypy_cache/**",
+    "**/.ruff_cache/**",
+    "**/.idea/**",
+    "**/.vscode/**",
+    "**/*.log",
+    "**/*.sqlite3",
+    "**/.DS_Store"
+  ]
+}
