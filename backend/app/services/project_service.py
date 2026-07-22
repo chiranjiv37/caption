@@ -1,11 +1,13 @@
 """Project service."""
 import uuid
+from pathlib import Path
 from typing import Optional, List
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, func, and_, or_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.models.project import Project, ProjectShare
 from app.models.series import Series
 from app.models.user import User
@@ -29,6 +31,57 @@ class ProjectService:
         if name:
             return name[0].upper()
         return "P"
+
+    def _resolve_file_extension(
+        self,
+        original_filename: str,
+        content_type: Optional[str] = None,
+    ) -> str:
+        """Determine file extension from filename or content type."""
+        file_extension = Path(original_filename).suffix
+        if file_extension:
+            return file_extension
+
+        content_type = content_type or ""
+        if "mp4" in content_type:
+            return ".mp4"
+        if "mp3" in content_type:
+            return ".mp3"
+        if "wav" in content_type:
+            return ".wav"
+        return ".bin"
+
+    def save_project_file(
+        self,
+        project: Project,
+        file_data: bytes,
+        original_filename: str,
+        content_type: Optional[str] = None,
+    ) -> str:
+        """Save uploaded file to disk and return relative storage_key.
+
+        Writes to {storage_location}/{project_id}/{uuid}{ext} and returns
+        the relative path {project_id}/{filename}.
+        """
+        settings = get_settings()
+        project_folder = Path(settings.storage_location) / str(project.id)
+        project_folder.mkdir(parents=True, exist_ok=True)
+
+        file_extension = self._resolve_file_extension(
+            original_filename, content_type
+        )
+        file_name = f"{uuid.uuid4()}{file_extension}"
+        file_path = project_folder / file_name
+
+        with open(file_path, "wb") as f:
+            f.write(file_data)
+
+        return str(Path(str(project.id)) / file_name)
+
+    def resolve_absolute_path(self, storage_key: str) -> Path:
+        """Resolve absolute filesystem path from a relative storage_key."""
+        settings = get_settings()
+        return Path(settings.storage_location) / storage_key
 
     async def create_project(self, user_id: uuid.UUID, data: ProjectCreate) -> Project:
         """Create a new project."""

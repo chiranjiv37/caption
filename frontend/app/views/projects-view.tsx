@@ -3,6 +3,7 @@
 import { useAppState } from '@/app/hooks/use-app-state';
 import { useProjects } from '@/app/hooks/use-projects';
 import { useSeries } from '@/app/hooks/use-series';
+import { projectsApi } from '@/app/lib/api';
 import { CreateProjectDialog } from '@/app/components/create-project-dialog';
 import { CreateSeriesDialog } from '@/app/components/create-series-dialog';
 import { STATUSES, SORTS, TILES } from '@/app/data/initial-data';
@@ -33,7 +34,7 @@ import {
   Globe,
   Loader2,
 } from 'lucide-react';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export function ProjectsView() {
@@ -54,35 +55,42 @@ export function ProjectsView() {
 
   const [localSearch, setLocalSearch] = useState(search);
   const [showArchived, setShowArchived] = useState(false);
+  const [createProgress, setCreateProgress] = useState(0);
+  const [createStatus, setCreateStatus] = useState<string | undefined>(undefined);
 
-  // API integration for projects
-  const {
-    projects: apiProjects,
-    total,
-    isLoading,
-    error,
-    toggleFavorite: apiToggleFavorite,
-    toggleArchive: apiToggleArchive,
-    deleteProject: apiDeleteProject,
-    duplicateProject: apiDuplicateProject,
-    createProject,
-  } = useProjects({
+  // API integration for projects - memoize options to prevent unnecessary re-fetches
+  const projectOptions = useMemo(() => ({
     search: localSearch || undefined,
     status: status || undefined,
     archived: showArchived || undefined,
     sort_by: sort === 'modified' ? 'updated_at' : sort === 'created' ? 'created_at' : 'name',
     sort_order: 'desc',
-  });
+  }), [localSearch, status, showArchived, sort]);
 
-  // API integration for series
   const {
-    series: seriesList,
-    createSeries,
-  } = useSeries({
+    projects: apiProjects,
+    total,
+    isLoading,
+    error,
+    refetch,
+    toggleFavorite: apiToggleFavorite,
+    toggleArchive: apiToggleArchive,
+    deleteProject: apiDeleteProject,
+    duplicateProject: apiDuplicateProject,
+    createProject,
+  } = useProjects(projectOptions);
+
+  // API integration for series - memoize options
+  const seriesOptions = useMemo(() => ({
     archived: false,
     sort_by: 'updated_at',
     sort_order: 'desc',
-  });
+  }), []);
+
+  const {
+    series: seriesList,
+    createSeries,
+  } = useSeries(seriesOptions);
 
   // Transform API projects to match expected format
   const projects = useMemo(() => {
@@ -184,9 +192,41 @@ export function ProjectsView() {
     description?: string;
     source_language: string;
     series_id?: string;
+    file: File;
   }) => {
-    await createProject(data);
-    dispatch({ type: 'SET_TOAST', payload: `Project created · ${data.name}` });
+    setCreateProgress(0);
+    setCreateStatus('uploading');
+
+    try {
+      // Create the project and upload the media file
+      const project = await createProject(
+        {
+          name: data.name,
+          description: data.description,
+          source_language: data.source_language,
+          series_id: data.series_id,
+          file: data.file,
+        },
+        (progress) => {
+          setCreateProgress(progress);
+          setCreateStatus('uploading');
+        }
+      );
+
+      // Start transcription using the saved file path
+      setCreateStatus('transcribing');
+      setCreateProgress(100);
+      await projectsApi.transcribe(project.id);
+
+      dispatch({ type: 'SET_TOAST', payload: `Project created · ${data.name}` });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create project';
+      dispatch({ type: 'SET_TOAST', payload: message });
+      throw err;
+    } finally {
+      setCreateProgress(0);
+      setCreateStatus(undefined);
+    }
   }, [createProject, dispatch]);
 
   const handleCreateSeries = useCallback(async (data: {
@@ -198,6 +238,39 @@ export function ProjectsView() {
     // Optionally navigate to series view
     // dispatch({ type: 'SET_VIEW', payload: 'series' });
   }, [createSeries, dispatch]);
+
+  // Poll job status for projects with active transcription jobs
+  // const activeProjectIdsStr = useMemo(
+  //   () =>
+  //     projects
+  //       .filter(
+  //         p =>
+  //           p.job_status === "uploading" ||
+  //           p.job_status === "transcribing"
+  //       )
+  //       .map(p => p.id)
+  //       .sort()
+  //       .join(","),
+  //   [projects]
+  // );
+
+  // useEffect(() => {
+  //   console.log("Polling effect", activeProjectIdsStr);
+
+
+  //   if (!activeProjectIdsStr) return;
+
+  //   const poll = async () => {
+  //     console.log("poll", new Date().toLocaleTimeString());
+  //     await refetch();
+  //   };
+
+  //   poll();
+
+  //   const interval = setInterval(poll, 3000);
+
+  //   return () => clearInterval(interval);
+  // }, [activeProjectIdsStr, refetch]);
 
   if (error) {
     return (
@@ -422,8 +495,20 @@ export function ProjectsView() {
                       className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
                       style={{ background: statusColor(project.status), color: 'white' }}
                     >
-                      {statusLabel(project.status)}
+                      {project.job_status === 'uploading'
+                        ? 'Uploading...'
+                        : project.job_status === 'transcribing'
+                          ? 'Transcribing...'
+                          : statusLabel(project.status)}
                     </span>
+                    {(project.job_status === 'uploading' || project.job_status === 'transcribing') && (
+                      <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden max-w-[80px]">
+                        <div
+                          className="h-full bg-accent transition-all duration-500"
+                          style={{ width: `${Math.max(5, project.job_progress ?? 0)}%` }}
+                        />
+                      </div>
+                    )}
                     <span>{project.langs} languages</span>
                     <span>·</span>
                     <span>{project.dur}</span>
@@ -469,6 +554,8 @@ export function ProjectsView() {
           onOpenChange={(open) => dispatch({ type: 'SET_DIALOG_OPEN', payload: open })}
           onCreate={handleCreateProject}
           series={seriesList.map(s => ({ id: s.id, name: s.name }))}
+          progress={createProgress}
+          status={createStatus}
         />
 
         {/* Create Series Dialog */}

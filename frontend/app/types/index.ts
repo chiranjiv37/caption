@@ -12,6 +12,14 @@ export interface Project {
   status: 'transcribed' | 'translated' | 'captioned';
   role: 'owner' | 'edit' | 'view';
   ts: number;
+  storage_key?: string;
+  duration_seconds?: number;
+
+  // Job tracking for transcription
+  job_status?: 'pending' | 'uploading' | 'transcribing' | 'completed' | 'failed';
+  job_progress?: number;
+  job_id?: string;
+  job_message?: string;
 }
 
 export interface Episode {

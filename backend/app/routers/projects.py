@@ -1,12 +1,23 @@
 """Projects router."""
+from pathlib import Path
 from typing import Optional
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    Query,
+    status,
+    UploadFile,
+    File,
+    Form,
+    HTTPException,
+)
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_user_bearer_or_query
 from app.models.user import User
 from app.schemas.project import (
     ProjectCreate,
@@ -15,11 +26,29 @@ from app.schemas.project import (
     ProjectDetailResponse,
     ProjectDuplicateRequest,
     ProjectMoveRequest,
+    ProjectTranscribeResponse,
 )
+from app.schemas.job import JobStatusResponse
 from app.schemas.common import PaginatedResponse, MessageResponse
 from app.services.project_service import ProjectService
+from app.services.job_service import JobService
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
+
+MEDIA_TYPES = {
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+}
+
+
+def _media_type_for_path(path: Path) -> str:
+    return MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream")
 
 
 @router.get(
@@ -73,13 +102,41 @@ async def list_projects(
     summary="Create project",
 )
 async def create_project(
-    data: ProjectCreate,
+    name: str = Form(..., min_length=1, max_length=255),
+    description: Optional[str] = Form(None),
+    source_language: str = Form("en"),
+    series_id: Optional[uuid.UUID] = Form(None),
+    file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new caption project."""
+    """Create a new caption project and upload its media file."""
+    file_data = await file.read()
+    if not file_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty",
+        )
+
     project_service = ProjectService(db)
+    data = ProjectCreate(
+        name=name,
+        description=description,
+        source_language=source_language,
+        series_id=series_id,
+    )
     project = await project_service.create_project(current_user.id, data)
+
+    storage_key = project_service.save_project_file(
+        project=project,
+        file_data=file_data,
+        original_filename=file.filename or "upload",
+        content_type=file.content_type,
+    )
+    project.storage_key = storage_key
+    await db.commit()
+    await db.refresh(project)
+
     return project
 
 
@@ -214,5 +271,130 @@ async def move_to_series(
     return project
 
 
-# Import HTTPException here to avoid circular imports
-from fastapi import HTTPException
+@router.post(
+    "/{project_id}/transcribe",
+    response_model=ProjectTranscribeResponse,
+    summary="Start transcription",
+)
+async def transcribe_project(
+    project_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Start a transcription job for a project using its saved media file."""
+    project_service = ProjectService(db)
+    project = await project_service.get_project(project_id, current_user.id)
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    if project.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the project owner can start transcription",
+        )
+
+    if not project.storage_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project has no uploaded media file",
+        )
+
+    file_path = project_service.resolve_absolute_path(project.storage_key)
+    if not file_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project media file not found on disk",
+        )
+
+    job_service = JobService(db)
+    job_id = await job_service.create_transcription_job(
+        project_id=project_id,
+        file_path=str(file_path),
+        language=project.source_language,
+    )
+
+    return ProjectTranscribeResponse(
+        message="Transcription job is running.",
+        project_id=project_id,
+        storage_key=project.storage_key,
+        job_id=job_id,
+        job_status="uploading",
+    )
+
+
+@router.get(
+    "/{project_id}/media",
+    summary="Stream project media",
+    responses={200: {"content": {"video/*": {}, "audio/*": {}}}},
+)
+async def get_project_media(
+    project_id: uuid.UUID,
+    current_user: User = Depends(get_current_user_bearer_or_query),
+    db: AsyncSession = Depends(get_db),
+):
+    """Stream the project's uploaded media file.
+
+    Supports Authorization Bearer or ?token= for HTML5 video elements.
+    FileResponse provides Accept-Ranges / Range seeking.
+    """
+    project_service = ProjectService(db)
+    project = await project_service.get_project(project_id, current_user.id)
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    if not project.storage_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project has no media file",
+        )
+
+    file_path = project_service.resolve_absolute_path(project.storage_key)
+    if not file_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project media file not found on disk",
+        )
+
+    return FileResponse(
+        path=file_path,
+        media_type=_media_type_for_path(file_path),
+        filename=file_path.name,
+        content_disposition_type="inline",
+    )
+
+
+@router.get(
+    "/{project_id}/job-status",
+    response_model=JobStatusResponse,
+    summary="Get transcription job status",
+)
+async def get_job_status(
+    project_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the current status of a project's transcription job."""
+    project_service = ProjectService(db)
+    project = await project_service.get_project(project_id, current_user.id)
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    return JobStatusResponse(
+        job_id=project.job_id,
+        status=project.job_status,
+        progress=project.job_progress,
+        message=project.job_message,
+        result=project.transcription_result,
+    )

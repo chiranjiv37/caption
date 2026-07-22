@@ -270,6 +270,8 @@ export const projectsApi = {
   // }>('/projects?' + new URLSearchParams(params as Record<string, string>).toString()),
 
   list: (params = {}) => {
+    console.log("Calling project API");
+    console.trace("projectsApi.list called");
     const filteredParams = Object.fromEntries(
       Object.entries(params).filter(
         ([_, value]) => value !== undefined && value !== null
@@ -282,8 +284,78 @@ export const projectsApi = {
 
   get: (id: string) => apiClient.get<Project>(`/projects/${id}`),
 
-  create: (data: { name: string; description?: string; source_language?: string; series_id?: string }) =>
-    apiClient.post<Project>('/projects', data),
+  getMediaUrl: (id: string): string | null => {
+    const token = apiClient.getAccessToken();
+    if (!token) return null;
+    return `${API_BASE_URL}/projects/${id}/media?token=${encodeURIComponent(token)}`;
+  },
+
+  create: (
+    data: {
+      name: string;
+      description?: string;
+      source_language?: string;
+      series_id?: string;
+      file: File;
+    },
+    onProgress?: (progress: number) => void
+  ): Promise<Project> => {
+    const url = `${API_BASE_URL}/projects`;
+    const formData = new FormData();
+    formData.append('name', data.name);
+    if (data.description) {
+      formData.append('description', data.description);
+    }
+    if (data.source_language) {
+      formData.append('source_language', data.source_language);
+    }
+    if (data.series_id) {
+      formData.append('series_id', data.series_id);
+    }
+    formData.append('file', data.file);
+
+    const token = apiClient.getAccessToken();
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable && onProgress) {
+          const progress = Math.round((event.loaded / event.total) * 100);
+          onProgress(progress);
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            resolve(xhr.responseText as unknown as Project);
+          }
+        } else {
+          let message = `Create failed: ${xhr.statusText}`;
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            message = errorData.detail || errorData.message || message;
+          } catch {
+            // ignore parse error
+          }
+          reject(new Error(message));
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        reject(new Error('Create failed'));
+      });
+
+      xhr.open('POST', url);
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+      xhr.send(formData);
+    });
+  },
 
   update: (id: string, data: Partial<Project>) =>
     apiClient.put<Project>(`/projects/${id}`, data),
@@ -302,6 +374,17 @@ export const projectsApi = {
 
   moveToSeries: (id: string, seriesId?: string) =>
     apiClient.post<Project>(`/projects/${id}/move-to-series`, { series_id: seriesId }),
+
+  transcribe: (id: string): Promise<{
+    message: string;
+    project_id: string;
+    storage_key: string;
+    job_id: string;
+    job_status: string;
+  }> => apiClient.post(`/projects/${id}/transcribe`),
+
+  getJobStatus: (id: string) =>
+    apiClient.get<JobStatus>(`/projects/${id}/job-status`),
 };
 
 // Assets API
@@ -395,6 +478,21 @@ export interface Project {
   updated?: string;
   created_at: string;
   updated_at: string;
+
+  // Job tracking
+  job_id?: string;
+  job_status?: 'pending' | 'uploading' | 'transcribing' | 'completed' | 'failed';
+  job_progress?: number;
+  job_message?: string;
+  storage_key?: string;
+}
+
+export interface JobStatus {
+  job_id?: string;
+  status: 'pending' | 'uploading' | 'transcribing' | 'completed' | 'failed';
+  progress: number;
+  message?: string;
+  result?: Record<string, unknown>;
 }
 
 export interface Series {

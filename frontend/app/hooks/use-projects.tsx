@@ -20,7 +20,13 @@ interface UseProjectsReturn {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  createProject: (data: { name: string; description?: string; source_language?: string }) => Promise<Project>;
+  createProject: (data: {
+    name: string;
+    description?: string;
+    source_language?: string;
+    series_id?: string;
+    file: File;
+  }, onProgress?: (progress: number) => void) => Promise<Project>;
   updateProject: (id: string, data: Partial<Project>) => Promise<Project>;
   deleteProject: (id: string, permanent?: boolean) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
@@ -34,12 +40,15 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Destructure options to ensure stable dependencies
+  const { search, status, favorite, archived, sort_by, sort_order, page, per_page } = options;
+
   const fetchProjects = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await projectsApi.list(options) as { items: Project[]; total: number };
+      const response = await projectsApi.list({ search, status, favorite, archived, sort_by, sort_order, page, per_page }) as { items: Project[]; total: number };
 
       // Transform API response to match frontend format
       const transformedProjects = response.items.map(project => ({
@@ -59,14 +68,24 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
     } finally {
       setIsLoading(false);
     }
-  }, [options.search, options.status, options.favorite, options.archived, options.sort_by, options.sort_order, options.page]);
+  }, [search, status, favorite, archived, sort_by, sort_order, page, per_page]);
 
   useEffect(() => {
+    console.log("fetchProjects effect");
     fetchProjects();
   }, [fetchProjects]);
 
-  const createProject = useCallback(async (data: { name: string; description?: string; source_language?: string }) => {
-    const project = await projectsApi.create(data);
+  const createProject = useCallback(async (
+    data: {
+      name: string;
+      description?: string;
+      source_language?: string;
+      series_id?: string;
+      file: File;
+    },
+    onProgress?: (progress: number) => void
+  ) => {
+    const project = await projectsApi.create(data, onProgress);
     await fetchProjects();
     return project;
   }, [fetchProjects]);

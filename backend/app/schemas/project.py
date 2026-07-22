@@ -50,6 +50,12 @@ class ProjectListResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    # Job tracking
+    job_id: Optional[str] = None
+    job_status: str = "pending"
+    job_progress: int = 0
+    job_message: Optional[str] = None
+
     # Computed fields
     langs: int = 1  # Number of languages (default 1 for now)
 
@@ -79,3 +85,14 @@ class ProjectDuplicateRequest(BaseModel):
 class ProjectMoveRequest(BaseModel):
     """Request to move project to series."""
     series_id: Optional[uuid.UUID] = None
+
+
+class ProjectTranscribeResponse(BaseModel):
+    """Response for transcribe endpoint."""
+    model_config = ConfigDict(from_attributes=True)
+
+    message: str
+    project_id: uuid.UUID
+    storage_key: str
+    job_id: str
+    job_status: str
