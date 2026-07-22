@@ -108,3 +108,7 @@ nginx/
 #############################
 
 .claude/settings.local.json
+
+uploads/
+
+redis/

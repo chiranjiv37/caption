@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     # Upload Settings
     max_upload_size: int = Field(default=500_000_000, alias="MAX_UPLOAD_SIZE")  # 500MB
     upload_chunk_size: int = Field(default=10_485_760, alias="UPLOAD_CHUNK_SIZE")  # 10MB
+    storage_location: str = Field(default="/tmp/captions-studio", alias="STORAGE_LOCATION")
 
     @property
     def cors_origin_list(self) -> List[str]:

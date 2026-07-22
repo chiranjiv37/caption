@@ -30,12 +30,15 @@ export function useSeries(options: UseSeriesOptions = {}): UseSeriesReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Destructure options to ensure stable dependencies
+  const { search, archived, sort_by, sort_order, page, per_page } = options;
+
   const fetchSeries = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await seriesApi.list(options);
+      const response = await seriesApi.list({ search, archived, sort_by, sort_order, page, per_page });
 
       // Transform API response to match frontend format
       const transformedSeries = response.items.map(s => ({
@@ -51,7 +54,7 @@ export function useSeries(options: UseSeriesOptions = {}): UseSeriesReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [options.search, options.archived, options.sort_by, options.sort_order, options.page]);
+  }, [search, archived, sort_by, sort_order, page, per_page]);
 
   useEffect(() => {
     fetchSeries();

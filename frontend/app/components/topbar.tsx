@@ -109,14 +109,19 @@ export function TopBar() {
           className="flex flex-col items-end leading-tight no-underline flex-shrink-0 cursor-pointer"
           title="All projects"
         >
-          <span className="text-sm font-semibold tracking-wide">Platy Studio</span>
+          {/* <span className="text-sm font-semibold tracking-wide">Platy Studio</span>
           <span className="flex items-baseline -mt-0.5 mr-[3px] italic text-accent text-sm tracking-wide">
-            Dub
+            Caption
             <span className="not-italic opacity-80 ml-1.5 self-center flex items-center gap-1">
               <span className="text-[9px]">·</span>
               <span className="text-[7px] font-semibold uppercase tracking-wider">beta</span>
             </span>
-          </span>
+          </span> */}
+          <a href="/" className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/logo-text.png`} alt="Platy Studio" height={24} className="h-6 w-auto invert dark:invert-0" />
+            <span className="hidden text-[22px] font-normal italic tracking-[0.035em] text-accent sm:inline">Caption</span>
+          </a>
         </button>
 
         {/* Editor Navigation */}

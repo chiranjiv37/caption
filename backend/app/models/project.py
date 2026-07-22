@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey, func
+from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
@@ -71,6 +71,17 @@ class Project(Base):
 
     # Storage
     storage_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Job tracking for transcription
+    job_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    job_status: Mapped[str] = mapped_column(
+        String(50),
+        default="pending",
+        nullable=False,
+    )  # pending, uploading, transcribing, completed, failed
+    job_progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    job_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transcription_result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

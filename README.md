@@ -87,6 +87,50 @@ GRANT ALL PRIVILEGES ON DATABASE captions_studio TO captions_user;
 Step 6. if new database then run this command to create table in database
 python -m alembic upgrade head
 
+
+Step 7. setup redis if not running.
+mkdir -p /storage5/caption/redis/{conf,data,logs,run}
+
+nano /storage5/caption/redis/conf/redis.conf
+ '''
+ bind 127.0.0.1
+port 6380
+
+protected-mode yes
+
+daemonize yes
+
+dir /storage5/caption/redis/data
+
+dbfilename dump.rdb
+
+logfile /storage5/caption/redis/logs/redis.log
+
+pidfile /storage5/caption/redis/run/redis.pid
+
+appendonly yes
+appendfilename "appendonly.aof"
+
+save 900 1
+save 300 10
+save 60 10000
+
+# Development only:
+# no password
+
+# Production:
+# requirepass YOUR_PASSWORD
+ '''
+
+Step 8. run redis
+/usr/bin/redis-server /storage5/caption/redis/conf/redis.conf
+
+verify:- ss -tlnp | grep 6380
+
+Step 9. run celery to take task from jobqueue
+cd /storage5/caption/backend
+celery -A celery_worker worker --loglevel=info
+
 ```
 
 ## License

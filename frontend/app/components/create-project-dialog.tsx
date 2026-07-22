@@ -19,8 +19,11 @@ interface CreateProjectDialogProps {
     description?: string;
     source_language: string;
     series_id?: string;
+    file: File;
   }) => Promise<void>;
   series?: { id: string; name: string }[];
+  progress?: number;
+  status?: string;
 }
 
 const LANGUAGES = [
@@ -43,6 +46,8 @@ export function CreateProjectDialog({
   onOpenChange,
   onCreate,
   series = [],
+  progress: externalProgress,
+  status: externalStatus,
 }: CreateProjectDialogProps) {
   const [name, setName] = useState('');
   const [sourceLanguage, setSourceLanguage] = useState('en');
@@ -65,11 +70,17 @@ export function CreateProjectDialog({
       return;
     }
 
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) {
+      setError('Please select a video file');
+      return;
+    }
+
     setIsCreating(true);
     setCreateProgress(0);
     setError(null);
 
-    // Simulate progress
+    // Simulate initial progress until real upload progress starts
     const interval = setInterval(() => {
       setCreateProgress((prev) => Math.min(98, prev + 8 + Math.random() * 12));
     }, 110);
@@ -78,6 +89,7 @@ export function CreateProjectDialog({
       await onCreate({
         name: name.trim(),
         source_language: sourceLanguage,
+        file,
       });
 
       clearInterval(interval);
@@ -87,6 +99,9 @@ export function CreateProjectDialog({
       setName('');
       setSourceLanguage('en');
       setUploadName('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       onOpenChange(false);
     } catch (err) {
       clearInterval(interval);
@@ -105,6 +120,9 @@ export function CreateProjectDialog({
         setUploadName('');
         setError(null);
         setCreateProgress(0);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }, 150);
     }
   };
@@ -233,17 +251,25 @@ export function CreateProjectDialog({
               <div className="w-[38px] h-[38px] rounded-full border-[3px] border-border border-t-accent animate-spin" />
               <div>
                 <div className="text-[16px] font-semibold tracking-[-0.01em]">
-                  Transcribing audio…
+                  {externalStatus === 'uploading'
+                    ? 'Uploading video...'
+                    : externalStatus === 'transcribing'
+                    ? 'Transcribing audio...'
+                    : 'Creating project...'}
                 </div>
                 <div className="text-[13px] text-muted-foreground mt-0.5">
-                  Processing video and generating transcript
+                  {externalStatus === 'uploading'
+                    ? 'Uploading your video to the server'
+                    : externalStatus === 'transcribing'
+                    ? 'Processing video and generating transcript'
+                    : 'Setting up your caption project'}
                 </div>
               </div>
             </div>
             <div className="mt-5 h-[7px] rounded-full bg-secondary overflow-hidden">
               <div
                 className="h-full rounded-full bg-accent transition-[width] duration-150 ease-out"
-                style={{ width: `${createProgress}%` }}
+                style={{ width: `${externalProgress ?? createProgress}%` }}
               />
             </div>
           </div>
