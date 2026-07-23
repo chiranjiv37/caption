@@ -30,12 +30,23 @@ export function TopBar() {
   const { state, dispatch } = useAppState();
   const { user, logout } = useAuth();
   const router = useRouter();
-  const { view, theme, tier, activeProject, activeLangs, lang } = state;
+  const { view, theme, tier, activeProject, activeLangs, lang, segments, transcripts } = state;
   const { projects } = useProjects({ per_page: 50, sort_by: 'updated_at', sort_order: 'desc' });
 
   const activeLangName = CATALOG.find(l => l.id === lang)?.name || lang?.toUpperCase() || 'Language';
   const activeLangObjs = activeLangs
     .map(id => CATALOG.find(c => c.id === id) || { id, code: id.toUpperCase(), name: id.toUpperCase() });
+
+  const langProgress = (langId: string): number => {
+    const t = transcripts.find(
+      tr => tr.language_code === langId && (tr.type === 'original' || tr.type === 'translated'),
+    ) || transcripts.find(tr => tr.language_code === langId);
+    if (!t) return 0;
+    if (t.status === 'ready' || t.status === 'completed' || t.status === 'captioned') return 100;
+    if (langId === lang && segments.length > 0) return 100;
+    if (t.status === 'processing' || t.status === 'pending') return 45;
+    return segments.length > 0 && langId === lang ? 100 : 70;
+  };
 
   // Get user initials
   const userInitials = user?.full_name
@@ -62,8 +73,13 @@ export function TopBar() {
     dispatch({ type: 'CLOSE_MENUS' });
   };
 
-  const handleCopyUrl = () => {
-    dispatch({ type: 'SET_TOAST', payload: 'Shareable link copied' });
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      dispatch({ type: 'SET_TOAST', payload: 'Shareable link copied' });
+    } catch {
+      dispatch({ type: 'SET_TOAST', payload: 'Could not copy link' });
+    }
   };
 
   const handleToggleTheme = () => {
@@ -87,11 +103,16 @@ export function TopBar() {
     tileColor: colFor(p.tile),
   }));
 
-  const langRows = activeLangObjs.map(l => ({
-    ...l,
-    active: l.id === lang,
-    rowBg: l.id === lang ? 'bg-accent/10' : 'transparent',
-  }));
+  const langRows = activeLangObjs.map(l => {
+    const pct = langProgress(l.id);
+    return {
+      ...l,
+      active: l.id === lang,
+      rowBg: l.id === lang ? 'bg-accent/10' : 'transparent',
+      pct,
+      pctLabel: `${pct}%`,
+    };
+  });
 
   return (
     <header
@@ -218,14 +239,25 @@ export function TopBar() {
                           <span className="flex-1 text-left min-w-0 text-[13px] font-semibold text-foreground">
                             {l.name}
                           </span>
-                          {l.active && <Check className="w-4 h-4 text-accent flex-shrink-0" />}
+                          <span className="w-[46px] h-1 rounded-full overflow-hidden flex-shrink-0 bg-muted-foreground/20">
+                            <span
+                              className="block h-full rounded-full bg-[var(--ok)]"
+                              style={{ width: `${l.pct}%` }}
+                            />
+                          </span>
+                          <span className="mono text-[10.5px] text-muted-foreground w-[38px] text-right">
+                            {l.pctLabel}
+                          </span>
                         </DropdownMenuItem>
                       ))
                     )}
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    onClick={() => dispatch({ type: 'SET_ADD_LANG_OPEN', payload: true })}
+                    onClick={() => {
+                      dispatch({ type: 'CLOSE_MENUS' });
+                      dispatch({ type: 'SET_ADD_LANG_OPEN', payload: true });
+                    }}
                     className="flex items-center gap-2 w-full px-2 py-2 rounded-lg cursor-pointer text-accent font-semibold"
                   >
                     <span className="w-4 h-4 flex items-center justify-center">+</span>

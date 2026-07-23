@@ -351,9 +351,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
         styleMenuOpen: false,
         newMenuOpen: false,
         seriesLangMenuOpen: false,
+        speakerMenu: null,
       };
-    case 'TOGGLE_MENU':
-      return { ...state, [action.payload]: !state[action.payload] };
     case 'SET_CARD_MENU':
       return { ...state, cardMenuFor: action.payload };
     case 'SET_CONFIRM_DEL':
