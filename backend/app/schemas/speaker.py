@@ -10,6 +10,7 @@ class SpeakerBase(BaseModel):
     """Base speaker schema."""
     name: str = Field(..., min_length=1, max_length=255)
     hue: int = 265
+    voice_clone_id: Optional[str] = None
 
 
 class SpeakerCreate(SpeakerBase):
@@ -21,6 +22,7 @@ class SpeakerUpdate(BaseModel):
     """Schema for updating a speaker."""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     hue: Optional[int] = None
+    voice_clone_id: Optional[str] = None
 
 
 class SpeakerResponse(SpeakerBase):

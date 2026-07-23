@@ -2,13 +2,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { AppState, AppAction, Project, Series, Speaker, Segment, Episode } from '@/app/types';
-import {
-  INITIAL_PROJECTS,
-  INITIAL_SERIES,
-  INITIAL_SPEAKERS,
-  INITIAL_SEGMENTS,
-  TILES,
-} from '@/app/data/initial-data';
+import { TILES } from '@/app/data/initial-data';
 
 const initialState: AppState = {
   // View
@@ -17,19 +11,19 @@ const initialState: AppState = {
   tier: 'pro',
 
   // Projects
-  projects: INITIAL_PROJECTS,
+  projects: [],
   search: '',
   tab: 'all',
   kindTab: 'all',
   status: '',
   sort: 'modified',
-  favs: { p1: true },
+  favs: {},
   archived: {},
   deleted: {},
   inSeries: {},
 
   // Series
-  series: INITIAL_SERIES,
+  series: [],
   activeSeriesId: null,
   epOrder: {},
   epArchived: {},
@@ -37,14 +31,18 @@ const initialState: AppState = {
   epConfirmDel: null,
 
   // Editor
-  activeProject: INITIAL_PROJECTS[0],
-  segments: INITIAL_SEGMENTS,
-  speakers: INITIAL_SPEAKERS,
+  activeProject: null,
+  segments: [],
+  speakers: [],
+  transcripts: [],
+  activeTranscriptId: null,
+  editorLoading: false,
+  editorError: null,
   currentTime: 0,
   playing: false,
-  selectedId: 's1',
+  selectedId: null,
   lang: 'en',
-  activeLangs: ['en', 'es', 'fr', 'de', 'ja'],
+  activeLangs: [],
 
   // Settings
   capStyle: 'standard',
@@ -158,14 +156,38 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, archived: { ...state.archived, [action.payload]: true }, cardMenuFor: null };
     case 'DELETE_PROJECT':
       return { ...state, deleted: { ...state.deleted, [action.payload]: true }, cardMenuFor: null, confirmDelId: null };
-    case 'SET_ACTIVE_PROJECT':
-      return { ...state, activeProject: action.payload, view: 'editor', currentTime: 0, playing: false };
+    case 'SET_ACTIVE_PROJECT': {
+      const next = action.payload;
+      const sameId = state.activeProject?.id && next?.id === state.activeProject.id;
+      if (sameId && next) {
+        return { ...state, activeProject: next };
+      }
+      return {
+        ...state,
+        activeProject: next,
+        view: next ? 'editor' : state.view,
+        currentTime: 0,
+        playing: false,
+        segments: [],
+        speakers: [],
+        transcripts: [],
+        activeTranscriptId: null,
+        activeLangs: [],
+        selectedId: null,
+        editorLoading: !!next,
+        editorError: null,
+      };
+    }
     case 'ADD_PROJECT':
-      return { ...state, projects: [action.payload, ...state.projects], activeProject: action.payload };
+      return { ...state, projects: [action.payload, ...state.projects] };
+    case 'SET_PROJECTS':
+      return { ...state, projects: action.payload };
     case 'SET_ACTIVE_SERIES':
       return { ...state, activeSeriesId: action.payload, view: 'series' };
     case 'ADD_SERIES':
       return { ...state, series: [action.payload, ...state.series], activeSeriesId: action.payload.id };
+    case 'SET_SERIES':
+      return { ...state, series: action.payload };
     case 'UPDATE_SERIES':
       return {
         ...state,
@@ -181,14 +203,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, lang: action.payload, topLangOpen: false, panelLangOpen: false };
     case 'ADD_LANG': {
       if (state.activeLangs.includes(action.payload)) return state;
-      const newSegments = state.segments.map(seg => ({
-        ...seg,
-        text: { ...seg.text, [action.payload]: seg.text.en },
-      }));
       return {
         ...state,
         activeLangs: [...state.activeLangs, action.payload],
-        segments: newSegments,
         lang: action.payload,
       };
     }
@@ -196,6 +213,35 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         activeLangs: state.activeLangs.filter(l => l !== action.payload),
+      };
+    case 'SET_ACTIVE_LANGS':
+      return { ...state, activeLangs: action.payload };
+    case 'SET_SEGMENTS':
+      return { ...state, segments: action.payload };
+    case 'SET_SPEAKERS':
+      return { ...state, speakers: action.payload };
+    case 'SET_TRANSCRIPTS':
+      return { ...state, transcripts: action.payload };
+    case 'SET_ACTIVE_TRANSCRIPT':
+      return { ...state, activeTranscriptId: action.payload };
+    case 'SET_EDITOR_LOADING':
+      return { ...state, editorLoading: action.payload };
+    case 'SET_EDITOR_ERROR':
+      return { ...state, editorError: action.payload };
+    case 'CLEAR_EDITOR':
+      return {
+        ...state,
+        activeProject: null,
+        segments: [],
+        speakers: [],
+        transcripts: [],
+        activeTranscriptId: null,
+        activeLangs: [],
+        selectedId: null,
+        editorLoading: false,
+        editorError: null,
+        currentTime: 0,
+        playing: false,
       };
     case 'UPDATE_SEGMENT':
       return {
@@ -216,7 +262,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         speakers: others,
-        segments: state.segments.map(s => s.speaker === action.payload ? { ...s, speaker: target } : s),
+        segments: state.segments.map(s =>
+          s.speaker_id === action.payload ? { ...s, speaker_id: target } : s
+        ),
         chipMenuFor: null,
       };
     }
@@ -225,11 +273,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'MERGE_SPEAKERS': {
       const { srcId, dstId } = action.payload;
       if (srcId === dstId) return state;
-      const dst = state.speakers.find(s => s.id === dstId);
       return {
         ...state,
         speakers: state.speakers.filter(s => s.id !== srcId),
-        segments: state.segments.map(seg => seg.speaker === srcId ? { ...seg, speaker: dstId } : seg),
+        segments: state.segments.map(seg =>
+          seg.speaker_id === srcId ? { ...seg, speaker_id: dstId } : seg
+        ),
         chipMenuFor: null,
       };
     }
@@ -298,7 +347,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
         statusMenuOpen: false,
         sortMenuOpen: false,
         cardMenuFor: null,
-        confirmDelId: null,
         csOpen: false,
         styleMenuOpen: false,
         newMenuOpen: false,

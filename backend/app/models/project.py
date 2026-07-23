@@ -71,6 +71,8 @@ class Project(Base):
 
     # Storage
     storage_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    audio_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    thumbnail_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Job tracking for transcription
     job_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -101,8 +103,8 @@ class Project(Base):
         back_populates="projects",
         foreign_keys=[series_id],
     )
-    segments: Mapped[list["Segment"]] = relationship(
-        "Segment",
+    transcripts: Mapped[list["Transcript"]] = relationship(
+        "Transcript",
         back_populates="project",
         cascade="all, delete-orphan",
     )

@@ -92,16 +92,14 @@ export function ProjectsView() {
     createSeries,
   } = useSeries(seriesOptions);
 
-  // Transform API projects to match expected format
+  // API projects are already mapped; only fill missing tile hue index
   const projects = useMemo(() => {
     return apiProjects.map((p, index) => ({
       ...p,
-      tile: p.tile || TILES[index % TILES.length],
-      desc: p.description || '',
-      langs: p.langs || 1,
-      dur: p.duration_display || '0:00',
-      updated: p.updated || 'Just now',
-      ts: new Date(p.updated_at).getTime(),
+      tile: p.tile ?? TILES[index % TILES.length],
+      desc: p.desc || p.description || '',
+      langs: typeof p.langs === 'number' ? p.langs : 0,
+      dur: p.dur || '—',
     }));
   }, [apiProjects]);
 
@@ -233,42 +231,35 @@ export function ProjectsView() {
     name: string;
     description?: string;
   }) => {
-    await createSeries(data);
+    const created = await createSeries(data);
     dispatch({ type: 'SET_TOAST', payload: `Series created · ${data.name}` });
-    // Optionally navigate to series view
-    // dispatch({ type: 'SET_VIEW', payload: 'series' });
+    dispatch({ type: 'SET_ACTIVE_SERIES', payload: created.id });
   }, [createSeries, dispatch]);
 
   // Poll job status for projects with active transcription jobs
-  // const activeProjectIdsStr = useMemo(
-  //   () =>
-  //     projects
-  //       .filter(
-  //         p =>
-  //           p.job_status === "uploading" ||
-  //           p.job_status === "transcribing"
-  //       )
-  //       .map(p => p.id)
-  //       .sort()
-  //       .join(","),
-  //   [projects]
-  // );
+  const activeProjectIdsStr = useMemo(
+    () =>
+      projects
+        .filter(
+          p =>
+            p.job_status === 'uploading' ||
+            p.job_status === 'transcribing',
+        )
+        .map(p => p.id)
+        .sort()
+        .join(','),
+    [projects],
+  );
 
   // useEffect(() => {
-  //   console.log("Polling effect", activeProjectIdsStr);
-
-
   //   if (!activeProjectIdsStr) return;
 
   //   const poll = async () => {
-  //     console.log("poll", new Date().toLocaleTimeString());
   //     await refetch();
   //   };
 
   //   poll();
-
   //   const interval = setInterval(poll, 3000);
-
   //   return () => clearInterval(interval);
   // }, [activeProjectIdsStr, refetch]);
 
@@ -354,7 +345,7 @@ export function ProjectsView() {
             <span className="opacity-40">·</span>
             <span className="inline-flex items-center gap-1.5">
               <Globe className="w-4 h-4 opacity-70" />
-              <strong className="text-foreground font-bold">5</strong> caption languages
+              <strong className="text-foreground font-bold">{seriesList.length}</strong> series
             </span>
           </div>
         </section>
@@ -416,6 +407,46 @@ export function ProjectsView() {
             Archived
           </Button>
         </section>
+
+        {/* Series list */}
+        {!isLoading && seriesList.length > 0 && (
+          <section className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[15px] font-semibold">Series</h2>
+              <span className="text-[11px] font-bold text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
+                {seriesList.length}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {seriesList.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => dispatch({ type: 'SET_ACTIVE_SERIES', payload: s.id })}
+                  className="flex items-center gap-3 border rounded-xl bg-card p-4 text-left hover:shadow-md transition-shadow cursor-pointer"
+                >
+                  <span
+                    className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold"
+                    style={{
+                      color: `oklch(0.45 0.13 ${s.hue})`,
+                      background: `oklch(0.93 0.06 ${s.hue})`,
+                    }}
+                  >
+                    {(s.name.trim()[0] || 'S').toUpperCase()}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold truncate">{s.name}</span>
+                    <span className="block text-sm text-muted-foreground mt-0.5">
+                      {s.episode_count ?? 0} episodes
+                      {(s.languages?.length ?? 0) > 0 ? ` · ${s.languages!.length} languages` : ''}
+                    </span>
+                  </span>
+                  <Layers className="w-4 h-4 text-accent flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Loading State */}
         {isLoading && (
@@ -511,22 +542,22 @@ export function ProjectsView() {
                     )}
                     <span>{project.langs} languages</span>
                     <span>·</span>
-                    <span>{project.dur}</span>
-                    <span className="ml-auto">{project.updated}</span>
+                    <span>{project.dur || '—'}</span>
+                    <span className="ml-auto">{project.updated || ''}</span>
                   </div>
 
                   {/* Confirm Delete Overlay */}
                   {isConfirmDelete && (
                     <div className="absolute inset-0 bg-background/95 rounded-xl flex flex-col items-center justify-center gap-3 p-4" onClick={(e) => e.stopPropagation()}>
-                      <p className="text-sm font-medium">Delete this project?</p>
+                      <p className="text-sm font-medium">Are you sure to delete this project?</p>
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => dispatch({ type: 'SET_CONFIRM_DEL', payload: null })}>
                           <X className="w-4 h-4 mr-1" />
-                          Cancel
+                          No
                         </Button>
-                        <Button size="sm" variant="destructive" onClick={() => handleDelete(project.id)}>
+                        <Button size="sm" variant="destructive" onClick={() => handleDelete(project.id, true)}>
                           <Trash2 className="w-4 h-4 mr-1" />
-                          Delete
+                          Yes
                         </Button>
                       </div>
                     </div>

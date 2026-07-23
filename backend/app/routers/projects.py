@@ -32,6 +32,7 @@ from app.schemas.job import JobStatusResponse
 from app.schemas.common import PaginatedResponse, MessageResponse
 from app.services.project_service import ProjectService
 from app.services.job_service import JobService
+from app.utils.time import format_duration
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -49,6 +50,29 @@ MEDIA_TYPES = {
 
 def _media_type_for_path(path: Path) -> str:
     return MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream")
+
+
+async def _to_project_list_item(
+    project_service: ProjectService,
+    project,
+    langs: int | None = None,
+) -> ProjectListResponse:
+    if langs is None:
+        counts = await project_service.count_languages_by_project([project.id])
+        langs = counts.get(project.id, 0)
+    item = ProjectListResponse.model_validate(project)
+    item.langs = langs
+    return item
+
+
+async def _to_project_detail(
+    project_service: ProjectService,
+    project,
+) -> ProjectDetailResponse:
+    counts = await project_service.count_languages_by_project([project.id])
+    detail = ProjectDetailResponse.model_validate(project)
+    detail.langs = counts.get(project.id, 0)
+    return detail
 
 
 @router.get(
@@ -84,8 +108,18 @@ async def list_projects(
 
     total_pages = (total + per_page - 1) // per_page
 
+    langs_map = await project_service.count_languages_by_project(
+        [p.id for p in projects]
+    )
+    items = [
+        await _to_project_list_item(
+            project_service, p, langs=langs_map.get(p.id, 0)
+        )
+        for p in projects
+    ]
+
     return PaginatedResponse(
-        items=projects,
+        items=items,
         total=total,
         page=page,
         per_page=per_page,
@@ -137,7 +171,7 @@ async def create_project(
     await db.commit()
     await db.refresh(project)
 
-    return project
+    return await _to_project_detail(project_service, project)
 
 
 @router.get(
@@ -160,7 +194,7 @@ async def get_project(
             detail="Project not found",
         )
 
-    return project
+    return await _to_project_detail(project_service, project)
 
 
 @router.put(
@@ -179,7 +213,7 @@ async def update_project(
     project = await project_service.update_project(
         project_id, current_user.id, data
     )
-    return project
+    return await _to_project_detail(project_service, project)
 
 
 @router.delete(

@@ -35,11 +35,14 @@ from app.schemas.segment import (
     SegmentCreate,
     SegmentUpdate,
     SegmentResponse,
-    SegmentTextCreate,
-    SegmentTextResponse,
     SegmentBatchUpdateRequest,
     SegmentMergeRequest,
     SegmentSplitRequest,
+)
+from app.schemas.transcript import (
+    TranscriptCreate,
+    TranscriptUpdate,
+    TranscriptResponse,
 )
 from app.schemas.speaker import (
     SpeakerCreate,
@@ -101,11 +104,13 @@ __all__ = [
     "SegmentCreate",
     "SegmentUpdate",
     "SegmentResponse",
-    "SegmentTextCreate",
-    "SegmentTextResponse",
     "SegmentBatchUpdateRequest",
     "SegmentMergeRequest",
     "SegmentSplitRequest",
+    # Transcript
+    "TranscriptCreate",
+    "TranscriptUpdate",
+    "TranscriptResponse",
     # Speaker
     "SpeakerCreate",
     "SpeakerUpdate",

@@ -136,6 +136,67 @@ class ProjectService:
         )
         return result.scalar_one_or_none()
 
+    async def require_project_access(
+        self,
+        project_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> Project:
+        """Return project or raise 404 if user has no access."""
+        project = await self.get_project(project_id, user_id)
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
+            )
+        return project
+
+    async def require_project_edit(
+        self,
+        project_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> Project:
+        """Return project if user can edit; raise 404/403 otherwise."""
+        project = await self.require_project_access(project_id, user_id)
+
+        if project.owner_id == user_id:
+            return project
+
+        share_result = await self.db.execute(
+            select(ProjectShare).where(
+                and_(
+                    ProjectShare.project_id == project_id,
+                    ProjectShare.user_id == user_id,
+                    ProjectShare.role == "edit",
+                )
+            )
+        )
+        if not share_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to edit this project",
+            )
+        return project
+
+    async def count_languages_by_project(
+        self,
+        project_ids: List[uuid.UUID],
+    ) -> dict[uuid.UUID, int]:
+        """Count distinct transcript language codes per project."""
+        if not project_ids:
+            return {}
+
+        from app.models.transcript import Transcript
+
+        result = await self.db.execute(
+            select(
+                Transcript.project_id,
+                func.count(func.distinct(Transcript.language_code)),
+            )
+            .where(Transcript.project_id.in_(project_ids))
+            .group_by(Transcript.project_id)
+        )
+        return {row[0]: int(row[1]) for row in result.all()}
+
     async def list_projects(
         self,
         user_id: uuid.UUID,
@@ -323,7 +384,11 @@ class ProjectService:
         user_id: uuid.UUID,
         data: ProjectDuplicateRequest,
     ) -> Project:
-        """Duplicate a project."""
+        """Duplicate a project including speakers, transcripts, and segments."""
+        from app.models.segment import Segment
+        from app.models.speaker import Speaker
+        from app.models.transcript import Transcript
+
         project = await self.get_project(project_id, user_id)
 
         if not project:
@@ -332,7 +397,7 @@ class ProjectService:
                 detail="Project not found",
             )
 
-        # Create new project with same details
+        # Create new project with same details (reset job state)
         new_name = data.new_name or f"{project.name} (Copy)"
         new_project = Project(
             name=new_name,
@@ -344,13 +409,112 @@ class ProjectService:
             source_language=project.source_language,
             owner_id=user_id,
             series_id=project.series_id,
+            storage_key=None,
+            audio_path=None,
+            thumbnail_path=None,
+            status=project.status,
+            job_status="pending",
+            job_progress=0,
+            job_id=None,
+            job_message=None,
+            transcription_result=None,
         )
 
         self.db.add(new_project)
+        await self.db.flush()
+
+        # Copy speakers (old id -> new id)
+        speaker_result = await self.db.execute(
+            select(Speaker).where(Speaker.project_id == project_id)
+        )
+        speakers = list(speaker_result.scalars().all())
+        speaker_id_map: dict[uuid.UUID, uuid.UUID] = {}
+        for speaker in speakers:
+            new_speaker = Speaker(
+                project_id=new_project.id,
+                name=speaker.name,
+                hue=speaker.hue,
+                voice_clone_id=speaker.voice_clone_id,
+            )
+            self.db.add(new_speaker)
+            await self.db.flush()
+            speaker_id_map[speaker.id] = new_speaker.id
+
+        # Copy transcripts (two-pass for parent links)
+        transcript_result = await self.db.execute(
+            select(Transcript)
+            .where(Transcript.project_id == project_id)
+            .order_by(Transcript.created_at.asc())
+        )
+        transcripts = list(transcript_result.scalars().all())
+        transcript_id_map: dict[uuid.UUID, uuid.UUID] = {}
+
+        for transcript in transcripts:
+            new_transcript = Transcript(
+                project_id=new_project.id,
+                language_code=transcript.language_code,
+                type=transcript.type,
+                parent_transcript_id=None,
+                status=transcript.status,
+                version=transcript.version,
+            )
+            self.db.add(new_transcript)
+            await self.db.flush()
+            transcript_id_map[transcript.id] = new_transcript.id
+
+        for transcript in transcripts:
+            if transcript.parent_transcript_id:
+                child = await self.db.get(
+                    Transcript, transcript_id_map[transcript.id]
+                )
+                parent_new_id = transcript_id_map.get(transcript.parent_transcript_id)
+                if child and parent_new_id:
+                    child.parent_transcript_id = parent_new_id
+
+        await self.db.flush()
+
+        # Copy segments (two-pass for source_segment_id)
+        segment_result = await self.db.execute(
+            select(Segment)
+            .join(Transcript, Segment.transcript_id == Transcript.id)
+            .where(Transcript.project_id == project_id)
+            .order_by(Segment.sort_order.asc())
+        )
+        segments = list(segment_result.scalars().all())
+        segment_id_map: dict[uuid.UUID, uuid.UUID] = {}
+
+        for segment in segments:
+            new_transcript_id = transcript_id_map.get(segment.transcript_id)
+            if not new_transcript_id:
+                continue
+            new_speaker_id = (
+                speaker_id_map.get(segment.speaker_id)
+                if segment.speaker_id
+                else None
+            )
+            new_segment = Segment(
+                transcript_id=new_transcript_id,
+                speaker_id=new_speaker_id,
+                source_segment_id=None,
+                start_time=segment.start_time,
+                end_time=segment.end_time,
+                sort_order=segment.sort_order,
+                text=segment.text,
+                confidence=segment.confidence,
+            )
+            self.db.add(new_segment)
+            await self.db.flush()
+            segment_id_map[segment.id] = new_segment.id
+
+        for segment in segments:
+            if segment.source_segment_id and segment.id in segment_id_map:
+                new_seg = await self.db.get(Segment, segment_id_map[segment.id])
+                mapped_source = segment_id_map.get(segment.source_segment_id)
+                if new_seg and mapped_source:
+                    new_seg.source_segment_id = mapped_source
+
         await self.db.commit()
         await self.db.refresh(new_project)
-
-        # TODO: Copy segments and speakers
 
         return new_project
 

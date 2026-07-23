@@ -29,28 +29,45 @@ export function vttTime(sec: number): string {
 }
 
 // Build SRT content
-export function buildSRT(segments: Array<{ start: number; end: number; text: Record<string, string> }>, lang: string): string {
+export function buildSRT(
+  segments: Array<{ start_time?: number; end_time?: number; start?: number; end?: number; text: string }>,
+  _lang?: string,
+): string {
   return segments
-    .map((s, i) => `${i + 1}\n${srtTime(s.start)} --> ${srtTime(s.end)}\n${s.text[lang] || ''}\n`)
+    .map((s, i) => {
+      const start = s.start_time ?? s.start ?? 0;
+      const end = s.end_time ?? s.end ?? 0;
+      return `${i + 1}\n${srtTime(start)} --> ${srtTime(end)}\n${s.text || ''}\n`;
+    })
     .join('\n');
 }
 
 // Build VTT content
-export function buildVTT(segments: Array<{ start: number; end: number; text: Record<string, string> }>, lang: string): string {
+export function buildVTT(
+  segments: Array<{ start_time?: number; end_time?: number; start?: number; end?: number; text: string }>,
+  _lang?: string,
+): string {
   return 'WEBVTT\n\n' + segments
-    .map((s, i) => `${i + 1}\n${vttTime(s.start)} --> ${vttTime(s.end)}\n${s.text[lang] || ''}\n`)
+    .map((s, i) => {
+      const start = s.start_time ?? s.start ?? 0;
+      const end = s.end_time ?? s.end ?? 0;
+      return `${i + 1}\n${vttTime(start)} --> ${vttTime(end)}\n${s.text || ''}\n`;
+    })
     .join('\n');
 }
 
 // Build plain text transcript
 export function buildTXT(
-  segments: Array<{ speaker: string; text: Record<string, string> }>,
+  segments: Array<{ speaker_id?: string | null; speaker?: string; text: string }>,
   speakers: Array<{ id: string; name: string }>,
-  lang: string
+  _lang?: string,
 ): string {
   const byId = Object.fromEntries(speakers.map(s => [s.id, s.name]));
   return segments
-    .map(s => `${byId[s.speaker] ? byId[s.speaker] + ':  ' : ''}${s.text[lang] || ''}`)
+    .map(s => {
+      const sid = s.speaker_id ?? s.speaker;
+      return `${sid && byId[sid] ? byId[sid] + ':  ' : ''}${s.text || ''}`;
+    })
     .join('\n');
 }
 

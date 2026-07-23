@@ -2,6 +2,7 @@
 
 import { useAppState } from '@/app/hooks/use-app-state';
 import { useAuth } from '@/app/hooks/use-auth';
+import { useProjects } from '@/app/hooks/use-projects';
 import { CATALOG } from '@/app/data/initial-data';
 import { colFor } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -29,10 +30,12 @@ export function TopBar() {
   const { state, dispatch } = useAppState();
   const { user, logout } = useAuth();
   const router = useRouter();
-  const { view, theme, tier, activeProject, projects, activeLangs, lang } = state;
+  const { view, theme, tier, activeProject, activeLangs, lang } = state;
+  const { projects } = useProjects({ per_page: 50, sort_by: 'updated_at', sort_order: 'desc' });
 
-  const activeLangName = CATALOG.find(l => l.id === lang)?.name || 'English';
-  const activeLangObjs = activeLangs.map(id => CATALOG.find(c => c.id === id)).filter(Boolean);
+  const activeLangName = CATALOG.find(l => l.id === lang)?.name || lang?.toUpperCase() || 'Language';
+  const activeLangObjs = activeLangs
+    .map(id => CATALOG.find(c => c.id === id) || { id, code: id.toUpperCase(), name: id.toUpperCase() });
 
   // Get user initials
   const userInitials = user?.full_name
@@ -84,7 +87,7 @@ export function TopBar() {
     tileColor: colFor(p.tile),
   }));
 
-  const langRows = activeLangObjs.filter((l): l is typeof CATALOG[0] => !!l).map(l => ({
+  const langRows = activeLangObjs.map(l => ({
     ...l,
     active: l.id === lang,
     rowBg: l.id === lang ? 'bg-accent/10' : 'transparent',
@@ -200,29 +203,25 @@ export function TopBar() {
                     Working language
                   </p>
                   <div className="max-h-[380px] overflow-auto flex flex-col gap-0.5">
-                    {langRows.map(l => (
-                      <DropdownMenuItem
-                        key={l.id}
-                        onClick={() => handlePickLang(l.id)}
-                        className={`flex items-center gap-2.5 w-full px-2 py-2 rounded-lg cursor-pointer ${l.rowBg}`}
-                      >
-                        <span className="mono text-[10px] font-bold text-muted-foreground w-5">
-                          {l.code}
-                        </span>
-                        <span className="flex-1 text-left min-w-0 text-[13px] font-semibold text-foreground">
-                          {l.name}
-                        </span>
-                        <div className="w-11 h-1 rounded-full bg-muted-foreground/20 overflow-hidden flex-shrink-0">
-                          <div
-                            className="h-full rounded-full bg-[var(--ok)]"
-                            style={{ width: l.pct || '0%' }}
-                          />
-                        </div>
-                        <span className="mono text-[10.5px] text-muted-foreground w-9 text-right">
-                          {l.pct || '0%'}
-                        </span>
-                      </DropdownMenuItem>
-                    ))}
+                    {langRows.length === 0 ? (
+                      <p className="px-2 py-3 text-[12px] text-muted-foreground">No languages yet</p>
+                    ) : (
+                      langRows.map(l => (
+                        <DropdownMenuItem
+                          key={l.id}
+                          onClick={() => handlePickLang(l.id)}
+                          className={`flex items-center gap-2.5 w-full px-2 py-2 rounded-lg cursor-pointer ${l.rowBg}`}
+                        >
+                          <span className="mono text-[10px] font-bold text-muted-foreground w-5">
+                            {l.code}
+                          </span>
+                          <span className="flex-1 text-left min-w-0 text-[13px] font-semibold text-foreground">
+                            {l.name}
+                          </span>
+                          {l.active && <Check className="w-4 h-4 text-accent flex-shrink-0" />}
+                        </DropdownMenuItem>
+                      ))
+                    )}
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import auth, projects, series, assets
+from app.routers import auth, projects, series, assets, transcripts
 
 settings = get_settings()
 
@@ -59,6 +59,7 @@ async def health_check():
 # Include routers
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(projects.router, prefix="/api/v1")
+app.include_router(transcripts.router, prefix="/api/v1")
 app.include_router(series.router, prefix="/api/v1")
 app.include_router(assets.router, prefix="/api/v1")
 

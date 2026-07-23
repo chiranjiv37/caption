@@ -163,6 +163,13 @@ class ApiClient {
     });
   }
 
+  async patch<T>(endpoint: string, body?: unknown): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+
   async delete<T>(endpoint: string): Promise<T> {
     return this.request<T>(endpoint, { method: 'DELETE' });
   }
@@ -387,10 +394,178 @@ export const projectsApi = {
     apiClient.get<JobStatus>(`/projects/${id}/job-status`),
 };
 
+// Transcripts / Segments / Project Speakers (nested under projects)
+export interface Transcript {
+  id: string;
+  project_id: string;
+  language_code: string;
+  type: 'original' | 'translation' | string;
+  parent_transcript_id?: string | null;
+  status: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiSegment {
+  id: string;
+  transcript_id: string;
+  source_segment_id?: string | null;
+  speaker_id?: string | null;
+  start_time: number;
+  end_time: number;
+  sort_order: number;
+  text: string;
+  confidence?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectSpeaker {
+  id: string;
+  project_id: string;
+  name: string;
+  hue: number;
+  voice_clone_id?: string | null;
+  created_at: string;
+  segment_count?: number;
+}
+
+export const transcriptsApi = {
+  list: (
+    projectId: string,
+    params?: { type?: string; language_code?: string },
+  ) => {
+    const filtered = Object.fromEntries(
+      Object.entries(params || {}).filter(
+        ([, v]) => v !== undefined && v !== null && v !== '',
+      ),
+    );
+    const qs = new URLSearchParams(filtered as Record<string, string>).toString();
+    return apiClient.get<Transcript[]>(
+      `/projects/${projectId}/transcripts${qs ? `?${qs}` : ''}`,
+    );
+  },
+
+  get: (projectId: string, transcriptId: string) =>
+    apiClient.get<Transcript>(`/projects/${projectId}/transcripts/${transcriptId}`),
+};
+
+export const segmentsApi = {
+  listByTranscript: (projectId: string, transcriptId: string) =>
+    apiClient.get<ApiSegment[]>(
+      `/projects/${projectId}/transcripts/${transcriptId}/segments`,
+    ),
+
+  listByLanguage: (projectId: string, languageCode: string) =>
+    apiClient.get<ApiSegment[]>(
+      `/projects/${projectId}/segments?language_code=${encodeURIComponent(languageCode)}`,
+    ),
+
+  create: (
+    projectId: string,
+    transcriptId: string,
+    data: {
+      start_time: number;
+      end_time: number;
+      text?: string;
+      speaker_id?: string;
+      sort_order?: number;
+    },
+  ) =>
+    apiClient.post<ApiSegment>(
+      `/projects/${projectId}/transcripts/${transcriptId}/segments`,
+      data,
+    ),
+
+  update: (
+    projectId: string,
+    segmentId: string,
+    data: Partial<{
+      start_time: number;
+      end_time: number;
+      text: string;
+      speaker_id: string | null;
+      sort_order: number;
+    }>,
+  ) =>
+    apiClient.patch<ApiSegment>(`/projects/${projectId}/segments/${segmentId}`, data),
+
+  delete: (projectId: string, segmentId: string) =>
+    apiClient.delete(`/projects/${projectId}/segments/${segmentId}`),
+
+  batchUpdate: (
+    projectId: string,
+    transcriptId: string,
+    segments: Array<{
+      id: string;
+      start_time?: number;
+      end_time?: number;
+      text?: string;
+      speaker_id?: string | null;
+      sort_order?: number;
+    }>,
+  ) =>
+    apiClient.put<ApiSegment[]>(
+      `/projects/${projectId}/transcripts/${transcriptId}/segments/batch`,
+      { segments },
+    ),
+
+  merge: (projectId: string, transcriptId: string, segmentIds: string[]) =>
+    apiClient.post<ApiSegment>(
+      `/projects/${projectId}/transcripts/${transcriptId}/segments/merge`,
+      { segment_ids: segmentIds },
+    ),
+
+  split: (projectId: string, segmentId: string, splitAt: number) =>
+    apiClient.post<ApiSegment[]>(
+      `/projects/${projectId}/segments/${segmentId}/split`,
+      { split_at: splitAt },
+    ),
+};
+
+export const projectSpeakersApi = {
+  list: (projectId: string) =>
+    apiClient.get<ProjectSpeaker[]>(`/projects/${projectId}/speakers`),
+
+  create: (
+    projectId: string,
+    data: { name: string; hue?: number; voice_clone_id?: string },
+  ) => apiClient.post<ProjectSpeaker>(`/projects/${projectId}/speakers`, data),
+
+  update: (
+    projectId: string,
+    speakerId: string,
+    data: Partial<{ name: string; hue: number; voice_clone_id: string | null }>,
+  ) =>
+    apiClient.patch<ProjectSpeaker>(
+      `/projects/${projectId}/speakers/${speakerId}`,
+      data,
+    ),
+
+  delete: (projectId: string, speakerId: string) =>
+    apiClient.delete(`/projects/${projectId}/speakers/${speakerId}`),
+};
+
 // Assets API
+export interface Asset {
+  id: string;
+  owner_id: string;
+  name: string;
+  path: string;
+  storage_key: string;
+  file_size?: number | null;
+  mime_type?: string | null;
+  kind?: string | null;
+  duration_seconds?: number | null;
+  is_flagged: boolean;
+  created_at: string;
+}
 export const assetsApi = {
   list: (path?: string) =>
-    apiClient.get(`/assets${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+    apiClient.get<Asset[]>(
+      `/assets${path ? `?path=${encodeURIComponent(path)}` : ''}`,
+    ),
 
   getPresignedUrl: (data: { filename: string; content_type: string; path?: string }) =>
     apiClient.post<{ url: string; fields: Record<string, string>; asset_id: string; storage_key: string }>('/assets/presigned-url', data),

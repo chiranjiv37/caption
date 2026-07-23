@@ -6,43 +6,20 @@ from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class SegmentTextBase(BaseModel):
-    """Base segment text schema."""
-    language_code: str = Field(..., min_length=2, max_length=10)
-    text: str
-    is_machine_translated: bool = False
-
-
-class SegmentTextCreate(SegmentTextBase):
-    """Schema for creating segment text."""
-    pass
-
-
-class SegmentTextUpdate(BaseModel):
-    """Schema for updating segment text."""
-    text: str
-
-
-class SegmentTextResponse(SegmentTextBase):
-    """Schema for segment text response."""
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    segment_id: uuid.UUID
-    created_at: datetime
-    updated_at: datetime
-
-
 class SegmentBase(BaseModel):
     """Base segment schema."""
     start_time: float = Field(..., ge=0)
     end_time: float = Field(..., ge=0)
+    text: str = ""
 
 
 class SegmentCreate(SegmentBase):
     """Schema for creating a segment."""
+    transcript_id: Optional[uuid.UUID] = None
     speaker_id: Optional[uuid.UUID] = None
-    texts: Optional[List[SegmentTextCreate]] = None
+    source_segment_id: Optional[uuid.UUID] = None
+    sort_order: int = 0
+    confidence: Optional[float] = None
 
 
 class SegmentUpdate(BaseModel):
@@ -50,6 +27,9 @@ class SegmentUpdate(BaseModel):
     start_time: Optional[float] = Field(None, ge=0)
     end_time: Optional[float] = Field(None, ge=0)
     speaker_id: Optional[uuid.UUID] = None
+    text: Optional[str] = None
+    sort_order: Optional[int] = None
+    confidence: Optional[float] = None
 
 
 class SegmentResponse(SegmentBase):
@@ -57,15 +37,13 @@ class SegmentResponse(SegmentBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    project_id: uuid.UUID
-    speaker_id: Optional[uuid.UUID]
+    transcript_id: uuid.UUID
+    source_segment_id: Optional[uuid.UUID] = None
+    speaker_id: Optional[uuid.UUID] = None
     sort_order: int
+    confidence: Optional[float] = None
     created_at: datetime
     updated_at: datetime
-
-    # Include texts for the current language
-    text: Optional[str] = None
-    texts: List[SegmentTextResponse] = []
 
     @property
     def duration(self) -> float:
@@ -79,6 +57,7 @@ class SegmentBatchUpdateItem(BaseModel):
     end_time: Optional[float] = None
     speaker_id: Optional[uuid.UUID] = None
     text: Optional[str] = None
+    sort_order: Optional[int] = None
 
 
 class SegmentBatchUpdateRequest(BaseModel):

@@ -6,6 +6,7 @@ python-multipart==0.0.6
 # Database
 sqlalchemy[asyncio]==2.0.25
 asyncpg==0.29.0
+psycopg2-binary==2.9.9
 alembic==1.13.1
 
 # Authentication
@@ -29,6 +30,10 @@ aioboto3==12.3.0
 python-magic==0.4.27
 httpx==0.26.0
 aiofiles==23.2.1
+numpy>=1.24.0
+torch==2.11.0
+torchaudio==2.11.0
+torchcodec==0.7.0
 
 # Testing
 pytest==7.4.4

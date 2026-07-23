@@ -26,6 +26,8 @@ class ProjectUpdate(BaseModel):
     is_favorite: Optional[bool] = None
     is_archived: Optional[bool] = None
     tile: Optional[int] = None
+    duration_seconds: Optional[int] = None
+    duration_display: Optional[str] = None
 
 
 class ProjectListResponse(BaseModel):
@@ -56,13 +58,15 @@ class ProjectListResponse(BaseModel):
     job_progress: int = 0
     job_message: Optional[str] = None
 
-    # Computed fields
-    langs: int = 1  # Number of languages (default 1 for now)
+    # Computed fields — distinct transcript language codes
+    langs: int = 0
 
 
 class ProjectDetailResponse(ProjectListResponse):
     """Schema for detailed project response."""
     storage_key: Optional[str]
+    audio_path: Optional[str] = None
+    thumbnail_path: Optional[str] = None
 
 
 class ProjectStats(BaseModel):

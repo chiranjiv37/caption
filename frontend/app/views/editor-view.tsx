@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppState } from '@/app/hooks/use-app-state';
-import { projectsApi, type Project as ApiProject } from '@/app/lib/api';
+import { useEditorData } from '@/app/hooks/use-editor-data';
+import { projectsApi } from '@/app/lib/api';
 import { Button } from '@/components/ui/button';
 import { Play, Pause, Download, Settings } from 'lucide-react';
 
@@ -14,9 +15,28 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function segStart(s: { start_time: number; start?: number }) {
+  return s.start_time ?? s.start ?? 0;
+}
+
+function segEnd(s: { end_time: number; end?: number }) {
+  return s.end_time ?? s.end ?? 0;
+}
+
 export function EditorView() {
   const { state, dispatch } = useAppState();
-  const { activeProject, segments, speakers, currentTime, playing, lang } = state;
+  const {
+    activeProject,
+    segments,
+    speakers,
+    currentTime,
+    playing,
+    lang,
+    editorLoading,
+    editorError,
+  } = state;
+
+  const { persistDurationIfNeeded } = useEditorData();
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
@@ -24,11 +44,13 @@ export function EditorView() {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
 
-  const activeSeg = segments.find(s => currentTime >= s.start && currentTime < s.end);
-  const activeCaption = activeSeg ? activeSeg.text[lang] : '';
+  const activeSeg = segments.find(
+    s => currentTime >= segStart(s) && currentTime < segEnd(s),
+  );
+  const activeCaption = activeSeg?.text ?? '';
   const safeDuration = duration > 0 ? duration : 1;
 
-  // Load project detail + media URL when active project changes
+  // Load media URL when active project changes
   useEffect(() => {
     if (!activeProject?.id) {
       setMediaUrl(null);
@@ -44,7 +66,7 @@ export function EditorView() {
       setMediaError(null);
 
       try {
-        const detail: ApiProject = await projectsApi.get(activeProject.id);
+        const detail = await projectsApi.get(activeProject.id);
         if (cancelled) return;
 
         if (detail.duration_seconds && detail.duration_seconds > 0) {
@@ -68,7 +90,9 @@ export function EditorView() {
       } catch (err) {
         if (!cancelled) {
           setMediaUrl(null);
-          setMediaError(err instanceof Error ? err.message : 'Failed to load project media');
+          setMediaError(
+            err instanceof Error ? err.message : 'Failed to load project media',
+          );
         }
       } finally {
         if (!cancelled) setIsLoadingMedia(false);
@@ -81,7 +105,6 @@ export function EditorView() {
     };
   }, [activeProject?.id]);
 
-  // Sync play/pause state to the video element
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !mediaUrl) return;
@@ -95,14 +118,16 @@ export function EditorView() {
     }
   }, [playing, mediaUrl, dispatch]);
 
-  // Seek video when currentTime is set from transcript/timeline (not from timeupdate)
-  const seekTo = useCallback((time: number) => {
-    const video = videoRef.current;
-    if (video && Number.isFinite(time)) {
-      video.currentTime = time;
-    }
-    dispatch({ type: 'SET_CURRENT_TIME', payload: time });
-  }, [dispatch]);
+  const seekTo = useCallback(
+    (time: number) => {
+      const video = videoRef.current;
+      if (video && Number.isFinite(time)) {
+        video.currentTime = time;
+      }
+      dispatch({ type: 'SET_CURRENT_TIME', payload: time });
+    },
+    [dispatch],
+  );
 
   const handleTogglePlay = () => {
     dispatch({ type: 'SET_PLAYING', payload: !playing });
@@ -119,6 +144,7 @@ export function EditorView() {
     if (!video) return;
     if (Number.isFinite(video.duration) && video.duration > 0) {
       setDuration(video.duration);
+      void persistDurationIfNeeded(video.duration);
     }
   };
 
@@ -142,26 +168,32 @@ export function EditorView() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Stepper */}
       <div className="flex items-center gap-4 px-4 py-2 border-b bg-card">
         <span className="text-sm text-muted-foreground">Upload ✓</span>
         <span className="text-sm text-muted-foreground">Transcribe ✓</span>
         <span className="text-sm font-semibold">Edit captions (3)</span>
         <span className="text-sm text-muted-foreground">Output (4)</span>
         <div className="flex-1" />
-        <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'SET_EXPORT_OPEN', payload: true })} className="gap-1">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => dispatch({ type: 'SET_EXPORT_OPEN', payload: true })}
+          className="gap-1"
+        >
           <Settings className="w-4 h-4" />
           Settings
         </Button>
-        <Button size="sm" onClick={() => dispatch({ type: 'SET_EXPORT_OPEN', payload: true })} className="gap-1">
+        <Button
+          size="sm"
+          onClick={() => dispatch({ type: 'SET_EXPORT_OPEN', payload: true })}
+          className="gap-1"
+        >
           <Download className="w-4 h-4" />
           Output
         </Button>
       </div>
 
-      {/* Main Editor */}
       <div className="flex-1 grid grid-cols-2 gap-4 p-4 min-h-0">
-        {/* Video */}
         <div className="flex flex-col border rounded-xl bg-card overflow-hidden min-h-0">
           <div className="flex-1 bg-black flex items-center justify-center relative min-h-[240px]">
             {isLoadingMedia && (
@@ -207,38 +239,55 @@ export function EditorView() {
               />
             </div>
             <span className="text-xs text-muted-foreground tabular-nums">
-              {formatTime(currentTime)} / {formatTime(duration)}
+              {formatTime(currentTime)} / {duration > 0 ? formatTime(duration) : '—'}
             </span>
           </div>
         </div>
 
-        {/* Transcript */}
         <div className="flex flex-col border rounded-xl bg-card overflow-hidden min-h-0">
-          <div className="p-3 border-b">
+          <div className="p-3 border-b flex items-center justify-between gap-2">
             <h3 className="font-semibold">Transcript</h3>
+            {lang && (
+              <span className="text-xs text-muted-foreground uppercase">{lang}</span>
+            )}
           </div>
           <div className="flex-1 overflow-auto p-2">
-            {segments.map(s => (
-              <div
-                key={s.id}
-                onClick={() => {
-                  seekTo(s.start);
-                  dispatch({ type: 'SET_SELECTED_ID', payload: s.id });
-                }}
-                className="p-2 rounded cursor-pointer hover:bg-secondary"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{Math.floor(s.start)}s</span>
-                  <span className="text-xs font-medium">{speakers.find(sp => sp.id === s.speaker)?.name}</span>
+            {editorLoading && (
+              <p className="text-sm text-muted-foreground p-2">Loading captions…</p>
+            )}
+            {!editorLoading && editorError && (
+              <p className="text-sm text-destructive p-2">{editorError}</p>
+            )}
+            {!editorLoading && !editorError && segments.length === 0 && (
+              <p className="text-sm text-muted-foreground p-2">
+                No captions yet. Run transcription or wait for the job to finish.
+              </p>
+            )}
+            {!editorLoading &&
+              segments.map(s => (
+                <div
+                  key={s.id}
+                  onClick={() => {
+                    seekTo(segStart(s));
+                    dispatch({ type: 'SET_SELECTED_ID', payload: s.id });
+                  }}
+                  className="p-2 rounded cursor-pointer hover:bg-secondary"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {Math.floor(segStart(s))}s
+                    </span>
+                    <span className="text-xs font-medium">
+                      {speakers.find(sp => sp.id === s.speaker_id)?.name ?? ''}
+                    </span>
+                  </div>
+                  <p className="text-sm mt-1">{s.text}</p>
                 </div>
-                <p className="text-sm mt-1">{s.text[lang]}</p>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       </div>
 
-      {/* Timeline */}
       <div className="h-32 border-t bg-card p-4">
         <div className="text-sm font-semibold mb-2">Timeline</div>
         <div
@@ -246,19 +295,23 @@ export function EditorView() {
           onClick={handleProgressClick}
         >
           {segments.map(s => {
-            const left = (s.start / safeDuration) * 100;
-            const width = ((s.end - s.start) / safeDuration) * 100;
+            const left = (segStart(s) / safeDuration) * 100;
+            const width = ((segEnd(s) - segStart(s)) / safeDuration) * 100;
             return (
               <div
                 key={s.id}
-                onClick={(e) => {
+                onClick={e => {
                   e.stopPropagation();
-                  seekTo(s.start);
+                  seekTo(segStart(s));
                 }}
                 className="absolute h-8 rounded bg-accent/80 text-white text-xs flex items-center px-2 cursor-pointer overflow-hidden"
-                style={{ left: `${left}%`, width: `${Math.max(width, 0.5)}%`, top: '20px' }}
+                style={{
+                  left: `${left}%`,
+                  width: `${Math.max(width, 0.5)}%`,
+                  top: '20px',
+                }}
               >
-                {s.text[lang]?.slice(0, 20)}
+                {s.text?.slice(0, 20)}
               </div>
             );
           })}

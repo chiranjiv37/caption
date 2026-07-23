@@ -26,6 +26,7 @@ class Speaker(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     hue: Mapped[int] = mapped_column(Integer, default=265)  # Color for UI
+    voice_clone_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

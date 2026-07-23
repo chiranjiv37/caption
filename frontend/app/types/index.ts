@@ -6,14 +6,24 @@ export interface Project {
   initial: string;
   tile: number;
   desc: string;
+  description?: string;
   langs: number;
   dur: string;
+  duration_seconds?: number;
+  duration_display?: string;
   updated: string;
-  status: 'transcribed' | 'translated' | 'captioned';
-  role: 'owner' | 'edit' | 'view';
+  updated_at?: string;
+  created_at?: string;
+  status: 'transcribed' | 'translated' | 'captioned' | string;
+  role: 'owner' | 'edit' | 'view' | string;
+  source_language?: string;
+  is_archived?: boolean;
+  is_favorite?: boolean;
+  is_deleted?: boolean;
+  owner_id?: string;
+  series_id?: string;
   ts: number;
   storage_key?: string;
-  duration_seconds?: number;
 
   // Job tracking for transcription
   job_status?: 'pending' | 'uploading' | 'transcribing' | 'completed' | 'failed';
@@ -26,10 +36,13 @@ export interface Episode {
   id: string;
   title: string;
   meta: string;
-  status: 'transcribed' | 'translated' | 'captioned';
+  status: 'transcribed' | 'translated' | 'captioned' | string;
   when: string;
   override: boolean;
   srcProj?: string;
+  project_id?: string;
+  series_id?: string;
+  sort_order?: number;
 }
 
 export interface Series {
@@ -37,11 +50,14 @@ export interface Series {
   name: string;
   hue: number;
   desc: string;
+  description?: string;
   langCodes: string[];
   speakers: SeriesSpeaker[];
   terms: GlossaryTerm[];
   episodes: Episode[];
   updated?: string;
+  is_archived?: boolean;
+  episode_count?: number;
 }
 
 export interface SeriesSpeaker {
@@ -54,20 +70,44 @@ export interface SeriesSpeaker {
 export interface GlossaryTerm {
   term: string;
   rule: string;
+  id?: string;
 }
 
 export interface Speaker {
   id: string;
   name: string;
   hue: number;
+  project_id?: string;
+  voice_clone_id?: string | null;
+  segment_count?: number;
 }
 
+/** Single-language caption segment (matches backend transcript segment). */
 export interface Segment {
   id: string;
-  speaker: string;
-  start: number;
-  end: number;
-  text: Record<string, string>;
+  transcript_id: string;
+  speaker_id: string | null;
+  start_time: number;
+  end_time: number;
+  sort_order: number;
+  text: string;
+  confidence?: number | null;
+  /** @deprecated alias of start_time for older helpers */
+  start?: number;
+  /** @deprecated alias of end_time for older helpers */
+  end?: number;
+}
+
+export interface Transcript {
+  id: string;
+  project_id: string;
+  language_code: string;
+  type: string;
+  parent_transcript_id?: string | null;
+  status: string;
+  version: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Language {
@@ -107,7 +147,7 @@ export interface AppState {
   theme: 'light' | 'dark';
   tier: 'lite' | 'pro';
 
-  // Projects
+  // Projects (local UI filters; list data comes from hooks)
   projects: Project[];
   search: string;
   tab: 'all' | 'mine' | 'fav';
@@ -131,6 +171,10 @@ export interface AppState {
   activeProject: Project | null;
   segments: Segment[];
   speakers: Speaker[];
+  transcripts: Transcript[];
+  activeTranscriptId: string | null;
+  editorLoading: boolean;
+  editorError: string | null;
   currentTime: number;
   playing: boolean;
   selectedId: string | null;
@@ -233,10 +277,12 @@ export type AppAction =
   | { type: 'TOGGLE_FAV'; payload: string }
   | { type: 'ARCHIVE_PROJECT'; payload: string }
   | { type: 'DELETE_PROJECT'; payload: string }
-  | { type: 'SET_ACTIVE_PROJECT'; payload: Project }
+  | { type: 'SET_ACTIVE_PROJECT'; payload: Project | null }
   | { type: 'ADD_PROJECT'; payload: Project }
+  | { type: 'SET_PROJECTS'; payload: Project[] }
   | { type: 'SET_ACTIVE_SERIES'; payload: string | null }
   | { type: 'ADD_SERIES'; payload: Series }
+  | { type: 'SET_SERIES'; payload: Series[] }
   | { type: 'UPDATE_SERIES'; payload: { id: string; updates: Partial<Series> } }
   | { type: 'SET_CURRENT_TIME'; payload: number }
   | { type: 'SET_PLAYING'; payload: boolean }
@@ -244,6 +290,14 @@ export type AppAction =
   | { type: 'SET_LANG'; payload: string }
   | { type: 'ADD_LANG'; payload: string }
   | { type: 'REMOVE_LANG'; payload: string }
+  | { type: 'SET_ACTIVE_LANGS'; payload: string[] }
+  | { type: 'SET_SEGMENTS'; payload: Segment[] }
+  | { type: 'SET_SPEAKERS'; payload: Speaker[] }
+  | { type: 'SET_TRANSCRIPTS'; payload: Transcript[] }
+  | { type: 'SET_ACTIVE_TRANSCRIPT'; payload: string | null }
+  | { type: 'SET_EDITOR_LOADING'; payload: boolean }
+  | { type: 'SET_EDITOR_ERROR'; payload: string | null }
+  | { type: 'CLEAR_EDITOR' }
   | { type: 'UPDATE_SEGMENT'; payload: { id: string; updates: Partial<Segment> } }
   | { type: 'ADD_SPEAKER'; payload: Speaker }
   | { type: 'UPDATE_SPEAKER'; payload: { id: string; updates: Partial<Speaker> } }

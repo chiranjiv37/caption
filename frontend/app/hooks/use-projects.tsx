@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { projectsApi, Project } from '@/app/lib/api';
+import { projectsApi, Project as ApiProject } from '@/app/lib/api';
+import { mapApiProject } from '@/app/lib/mappers';
+import type { Project } from '@/app/types';
 
 interface UseProjectsOptions {
   search?: string;
@@ -27,7 +29,7 @@ interface UseProjectsReturn {
     series_id?: string;
     file: File;
   }, onProgress?: (progress: number) => void) => Promise<Project>;
-  updateProject: (id: string, data: Partial<Project>) => Promise<Project>;
+  updateProject: (id: string, data: Partial<ApiProject>) => Promise<Project>;
   deleteProject: (id: string, permanent?: boolean) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   toggleArchive: (id: string) => Promise<void>;
@@ -40,7 +42,6 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Destructure options to ensure stable dependencies
   const { search, status, favorite, archived, sort_by, sort_order, page, per_page } = options;
 
   const fetchProjects = useCallback(async () => {
@@ -48,20 +49,11 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
     setError(null);
 
     try {
-      const response = await projectsApi.list({ search, status, favorite, archived, sort_by, sort_order, page, per_page }) as { items: Project[]; total: number };
+      const response = await projectsApi.list({
+        search, status, favorite, archived, sort_by, sort_order, page, per_page,
+      }) as { items: ApiProject[]; total: number };
 
-      // Transform API response to match frontend format
-      const transformedProjects = response.items.map(project => ({
-        ...project,
-        // Add frontend-specific fields if not present
-        langs: project.langs || 1,
-        dur: project.duration_display || formatDuration(project.duration_seconds || 0),
-        updated: formatRelativeTime(project.updated_at),
-        desc: project.description || '',
-        ts: new Date(project.updated_at).getTime(),
-      }));
-
-      setProjects(transformedProjects);
+      setProjects(response.items.map(mapApiProject));
       setTotal(response.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch projects');
@@ -71,7 +63,6 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
   }, [search, status, favorite, archived, sort_by, sort_order, page, per_page]);
 
   useEffect(() => {
-    console.log("fetchProjects effect");
     fetchProjects();
   }, [fetchProjects]);
 
@@ -87,13 +78,13 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
   ) => {
     const project = await projectsApi.create(data, onProgress);
     await fetchProjects();
-    return project;
+    return mapApiProject(project);
   }, [fetchProjects]);
 
-  const updateProject = useCallback(async (id: string, data: Partial<Project>) => {
+  const updateProject = useCallback(async (id: string, data: Partial<ApiProject>) => {
     const project = await projectsApi.update(id, data);
     await fetchProjects();
-    return project;
+    return mapApiProject(project);
   }, [fetchProjects]);
 
   const deleteProject = useCallback(async (id: string, permanent?: boolean) => {
@@ -114,7 +105,7 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
   const duplicateProject = useCallback(async (id: string, newName?: string) => {
     const project = await projectsApi.duplicate(id, newName);
     await fetchProjects();
-    return project;
+    return mapApiProject(project);
   }, [fetchProjects]);
 
   return {
@@ -149,7 +140,7 @@ export function useProject(projectId: string | null) {
 
       try {
         const data = await projectsApi.get(projectId);
-        setProject(data);
+        setProject(mapApiProject(data));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch project');
       } finally {
@@ -161,37 +152,4 @@ export function useProject(projectId: string | null) {
   }, [projectId]);
 
   return { project, isLoading, error };
-}
-
-// Utility functions
-function formatDuration(seconds: number): string {
-  if (seconds < 60) {
-    return `0:${seconds.toString().padStart(2, '0')}`;
-  }
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  if (mins < 60) {
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  }
-  const hours = Math.floor(mins / 60);
-  const remainingMins = mins % 60;
-  return `${hours}:${remainingMins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-}
-
-function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-  const diffWeeks = Math.floor(diffDays / 7);
-
-  if (diffSecs < 60) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffWeeks < 4) return `${diffWeeks}w ago`;
-  return date.toLocaleDateString();
 }
